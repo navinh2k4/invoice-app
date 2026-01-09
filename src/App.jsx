@@ -51,7 +51,6 @@ export default function InvoiceMakerApp() {
   const [date, setDate] = useState(new Date().toLocaleDateString('vi-VN'));
   const [invoiceCode, setInvoiceCode] = useState('HD001');
   
-  // Thông tin thanh toán (Bank Info)
   const [showBankInfo, setShowBankInfo] = useState(true);
   const [bankInfo, setBankInfo] = useState('• Ngân hàng: Agribank\n• Số tài khoản: 5300205625965\n• Chủ tài khoản: NGUYEN THANH TUNG');
 
@@ -67,10 +66,17 @@ export default function InvoiceMakerApp() {
   const [showMsgModal, setShowMsgModal] = useState(false);
   const [importText, setImportText] = useState('');
   const [generatedMsg, setGeneratedMsg] = useState('');
-  const [aiStatus, setAiStatus] = useState(null); // null = ko chạy, string = message đang chạy
+  const [aiStatus, setAiStatus] = useState(null); 
   const [copied, setCopied] = useState(false);
   
   const noteRef = useRef(null);
+
+  // --- HELPER FORMAT SỐ (MỚI) ---
+  // Format số thành chuỗi có dấu chấm: 100000 -> "100.000"
+  const formatNumberWithDots = (num) => {
+    if (!num) return '';
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
 
   // --- GEMINI API HELPERS ---
   const callGemini = async (prompt) => {
@@ -111,28 +117,15 @@ export default function InvoiceMakerApp() {
       
       const prompt = `
         Bạn là một trợ lý bán hàng thông minh. Nhiệm vụ của bạn là bóc tách thông tin từ tin nhắn đặt hàng.
-        
         Văn bản đầu vào: "${importText}"
-        
-        Hãy trích xuất các thông tin sau và trả về dưới dạng JSON (chỉ JSON thuần túy, không markdown):
-        1. "customer": Tên khách hàng (nếu có, ví dụ "anh Dũng", nếu không có để null).
-        2. "address": Địa chỉ khách (ví dụ "Quận 7", nếu không có để null).
-        3. "phone": Số điện thoại (nếu có, để null).
-        4. "items": Danh sách hàng hóa.
-           - "name": Tên sản phẩm.
-           - "unit": Đơn vị tính (chai, gói, bao, cái... đoán nếu thiếu).
-           - "qty": Số lượng (Number).
-           - "price": Đơn giá (Number). Hãy tự động đổi "k" thành nghìn (260k -> 260000), "tr" thành triệu. Nếu không có giá để 0.
-        
-        Ví dụ output mong muốn:
+        Hãy trích xuất và trả về JSON (chỉ JSON):
         {
-          "customer": "Anh Dũng",
-          "address": "Quận 7",
-          "phone": null,
-          "items": [
-            { "name": "Anvil", "unit": "Chai", "qty": 10, "price": 260000 }
-          ]
+          "customer": "Tên khách",
+          "address": "Địa chỉ",
+          "phone": "SĐT",
+          "items": [ { "name": "Tên SP", "unit": "ĐVT", "qty": số lượng, "price": đơn giá (số) } ]
         }
+        Lưu ý: "k" = nghìn (260k -> 260000), "tr" = triệu.
       `;
 
       try {
@@ -146,12 +139,10 @@ export default function InvoiceMakerApp() {
                   const cleanJson = jsonStr.substring(startBrace, endBrace + 1);
                   const data = JSON.parse(cleanJson);
                   
-                  // 1. Cập nhật thông tin khách hàng (nếu AI tìm thấy)
                   if (data.customer) setCustomerName(data.customer);
                   if (data.address) setCustomerAddress(data.address);
                   if (data.phone) setCustomerPhone(data.phone);
 
-                  // 2. Cập nhật danh sách hàng hóa
                   if (data.items && Array.isArray(data.items) && data.items.length > 0) {
                        const newItems = data.items.map(i => ({
                            id: Date.now() + Math.random(),
@@ -160,15 +151,12 @@ export default function InvoiceMakerApp() {
                            qty: Number(i.qty) || 1,
                            price: Number(i.price) || 0
                        }));
-                       
                        setItems(prev => [...prev, ...newItems]);
                        setShowImportModal(false); 
                        setImportText('');
                   } else {
                       alert("Không tìm thấy sản phẩm nào trong tin nhắn.");
                   }
-              } else {
-                  alert("Không thể đọc hiểu tin nhắn này.");
               }
           }
       } catch (e) { console.error(e); alert("Lỗi xử lý AI: " + e.message); } finally { setAiStatus(null); }
@@ -177,29 +165,16 @@ export default function InvoiceMakerApp() {
   const handleGenerateNote = async () => {
       setAiStatus("Đang suy nghĩ lời chúc hay...");
       const itemsStr = items.map(i => i.name).join(", ");
-      
-      // PROMPT MỚI: NGHIÊM NGẶT HƠN
       const prompt = `
         Hãy viết DUY NHẤT 1 câu ghi chú ngắn gọn (dưới 15 từ) để in lên hóa đơn gửi cho khách hàng tên là "${customerName}".
         Khách vừa mua các món: ${itemsStr}.
-        
-        Yêu cầu BẮT BUỘC:
-        1. Chỉ trả về nội dung câu nói.
-        2. KHÔNG dùng dấu ngoặc kép bao quanh.
-        3. KHÔNG đưa ra nhiều lựa chọn (Option 1, Option 2...).
-        4. KHÔNG hiển thị số lượng từ.
-        
-        Ví dụ output chuẩn: Cảm ơn Anh Tùng đã ủng hộ, chúc anh mùa màng bội thu!
+        Yêu cầu: Chỉ trả về nội dung câu nói, KHÔNG dùng dấu ngoặc kép.
       `;
-
       try {
           const res = await callGemini(prompt);
           if (res) {
-              // Làm sạch thêm 1 lần nữa cho chắc chắn
               let cleanNote = res.trim();
-              if (cleanNote.startsWith('"') && cleanNote.endsWith('"')) {
-                  cleanNote = cleanNote.slice(1, -1);
-              }
+              if (cleanNote.startsWith('"') && cleanNote.endsWith('"')) cleanNote = cleanNote.slice(1, -1);
               setNote(cleanNote);
           }
       } catch (e) { console.error(e); } finally { setAiStatus(null); }
@@ -209,7 +184,7 @@ export default function InvoiceMakerApp() {
       const total = items.reduce((s, i) => s + (i.qty * i.price), 0);
       if (total === 0) return;
       setAiStatus("Đang đọc số tiền thành chữ...");
-      const res = await callGemini(`Đọc số tiền ${total} thành chữ tiếng Việt (viết hoa đầu, kết thúc 'đồng'). Chỉ trả về text, không giải thích.`);
+      const res = await callGemini(`Đọc số tiền ${total} thành chữ tiếng Việt (viết hoa đầu, kết thúc 'đồng'). Chỉ trả về text.`);
       if (res) setAmountInWords(res.trim());
       setAiStatus(null);
   };
@@ -217,7 +192,6 @@ export default function InvoiceMakerApp() {
   const handleFixProductNames = async () => {
       setAiStatus("Đang sửa lỗi chính tả & viết hoa...");
       const names = items.map(i => i.name);
-      // Prompt rõ ràng yêu cầu mảng chuỗi
       const res = await callGemini(`Chuẩn hóa tên (Viết Hoa Chữ Đầu, Sửa Chính Tả): ${JSON.stringify(names)}. Trả về JSON Array of Strings.`);
       if (res) {
           try {
@@ -226,7 +200,6 @@ export default function InvoiceMakerApp() {
             if (fixed.length === items.length) {
                 setItems(items.map((it, idx) => ({ 
                     ...it, 
-                    // Kiểm tra kỹ kiểu dữ liệu trả về để tránh lỗi Object
                     name: (typeof fixed[idx] === 'string') ? fixed[idx] : (fixed[idx]?.name || it.name) 
                 })));
             }
@@ -508,7 +481,20 @@ export default function InvoiceMakerApp() {
                             <td className="border border-gray-400 p-1"><input value={item.unit} onChange={(e)=>handleItemChange(item.id, 'unit', e.target.value)} className={`w-full text-center outline-none ${isEditMode ? 'bg-white' : 'bg-transparent'}`}/></td>
                             <td className="border border-gray-400 p-1"><input type="number" value={item.qty} onChange={(e)=>handleItemChange(item.id, 'qty', e.target.value)} className={`w-full text-center font-bold outline-none ${isEditMode ? 'bg-white' : 'bg-transparent'}`}/></td>
                             {exportMode === 'full' && <>
-                                <td className="border border-gray-400 p-1"><input type="number" value={item.price} onChange={(e)=>handleItemChange(item.id, 'price', e.target.value)} className={`w-full text-right outline-none ${isEditMode ? 'bg-white' : 'bg-transparent'}`}/></td>
+                                <td className="border border-gray-400 p-1">
+                                    <input 
+                                        type="text" 
+                                        value={formatNumberWithDots(item.price)} 
+                                        onChange={(e) => {
+                                            const val = e.target.value.replace(/\./g, '');
+                                            if (/^\d*$/.test(val)) {
+                                                handleItemChange(item.id, 'price', val === '' ? 0 : parseInt(val, 10));
+                                            }
+                                        }}
+                                        className={`w-full text-right outline-none ${isEditMode ? 'bg-white' : 'bg-transparent'}`}
+                                        placeholder="0"
+                                    />
+                                </td>
                                 <td className="border border-gray-400 p-2 text-right">{formatCurrency(item.qty * item.price)}</td>
                             </>}
                             {exportMode === 'delivery' && <td className="border border-gray-400 p-2"></td>}
