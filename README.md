@@ -1,15 +1,14 @@
-Hướng Dẫn Deploy App Hóa Đơn Lên Vercel
-
+# Hướng Dẫn Deploy App Hóa Đơn Lên Vercel
 Dưới đây là các bước chi tiết để bạn đưa ứng dụng này từ code máy lên internet.
 
-Bước 1: Chuẩn bị Source Code ở Local
+## Bước 1: Chuẩn bị Source Code ở Local
 
 Tạo một thư mục mới trên máy tính của bạn (ví dụ: invoice-app), sau đó tạo các file sau bên trong thư mục đó.
 
-1.1 package.json
+### 1.1 package.json
 
 Tạo file package.json với nội dung sau để khai báo các thư viện cần thiết.
-
+```
 {
   "name": "invoice-maker-app",
   "private": true,
@@ -34,12 +33,12 @@ Tạo file package.json với nội dung sau để khai báo các thư viện c�
     "vite": "^5.0.0"
   }
 }
+```
 
-
-1.2 vite.config.js
+### 1.2 vite.config.js
 
 Cấu hình công cụ build Vite.
-
+```
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -47,14 +46,14 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
 })
+```
 
-
-1.3 Cấu hình Tailwind CSS
+### 1.3 Cấu hình Tailwind CSS
 
 Bạn cần tạo 2 file để Tailwind hoạt động.
 
-File tailwind.config.js:
-
+#### File tailwind.config.js:
+```
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -66,20 +65,20 @@ export default {
   },
   plugins: [],
 }
+```
 
-
-File postcss.config.js:
-
+#### File postcss.config.js:
+```
 export default {
   plugins: {
     tailwindcss: {},
     autoprefixer: {},
   },
 }
+```
 
-
-1.4 index.html (Nằm ở thư mục gốc)
-
+### 1.4 index.html (Nằm ở thư mục gốc)
+```
 <!doctype html>
 <html lang="vi">
   <head>
@@ -92,21 +91,21 @@ export default {
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
+```
 
-
-1.5 Thư mục src
+### 1.5 Thư mục src
 
 Tạo thư mục tên là src. Bên trong tạo 3 file:
 
-File src/index.css:
-
+#### File src/index.css:
+```
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+```
 
-
-File src/main.jsx:
-
+#### File src/main.jsx:
+```
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
@@ -117,12 +116,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>,
 )
+```
 
-
-File src/App.jsx:
+#### File src/App.jsx:
 Copy toàn bộ nội dung code React (file App.jsx) mà tôi đã cung cấp ở trên và dán vào đây.
 
-Bước 2: Cài đặt và Chạy thử
+# Bước 2: Cài đặt và Chạy thử
 
 Mở Terminal (Command Prompt) tại thư mục dự án:
 
@@ -130,23 +129,23 @@ Chạy lệnh npm install để tải thư viện.
 
 Chạy lệnh npm run dev để chạy thử dưới local.
 
-Bước 3: Đẩy lên GitHub
+# Bước 3: Đẩy lên GitHub
 
 Tạo một Repository mới trên GitHub (chế độ Public).
 
 Ở thư mục dự án, chạy các lệnh:
-
+```
 git init
 git add .
 git commit -m "First commit"
 git branch -M main
 git remote add origin [https://github.com/](https://github.com/)<tên-user-của-bạn>/<tên-repo>.git
 git push -u origin main
-
+```
 
 (Lưu ý: Nhớ tạo file .gitignore và thêm node_modules vào đó để không upload thư mục nặng này lên).
 
-Bước 4: Deploy lên Vercel
+# Bước 4: Deploy lên Vercel
 
 Truy cập vercel.com và đăng nhập bằng GitHub.
 
@@ -156,7 +155,10 @@ Chọn Repo GitHub bạn vừa tạo.
 
 Ở mục Environment Variables (Quan trọng để AI hoạt động):
 
+```
 Key: VITE_GEMINI_API_KEY
+```
+
 
 Value: AIzaSy... (Điền API Key Gemini của bạn vào đây).
 
