@@ -10,7 +10,7 @@ export default function InvoiceMakerApp() {
   ];
 
   // Thông tin cửa hàng (Editable)
-  const [shopName, setShopName] = useState('Cửa Hàng Thành Đạt');
+  const [shopName, setShopName] = useState('ĐẠI LÝ THÀNH ĐẠT');
   const [shopPhone, setShopPhone] = useState('0357041668');
   const [shopAddress, setShopAddress] = useState('Số 125, DT685, xã Kiến Đức, tỉnh Lâm Đồng');
 
@@ -25,12 +25,12 @@ export default function InvoiceMakerApp() {
   const [date, setDate] = useState(new Date().toLocaleDateString('vi-VN'));
   const [invoiceCode, setInvoiceCode] = useState('HD001');
   
-  // Thông tin thanh toán (Bank Info)
+  // Thông tin thanh toán (Bank Info) - ĐÃ CẬP NHẬT THEO YÊU CẦU
   const [showBankInfo, setShowBankInfo] = useState(true);
-  const [bankInfo, setBankInfo] = useState('Ngân hàng: Vietcombank - STK: 1234567890 - Chủ TK: NGUYEN VAN A');
+  const [bankInfo, setBankInfo] = useState('• Ngân hàng: Agribank\n• Số tài khoản: 5300205625965\n• Chủ tài khoản: NGUYEN THANH TUNG');
 
-  // Cấu hình & Trạng thái
-  const [paperSize, setPaperSize] = useState('a5'); 
+  // Cấu hình & Trạng thái - ĐÃ CẬP NHẬT MẶC ĐỊNH A4
+  const [paperSize, setPaperSize] = useState('a4'); 
   const [exportMode, setExportMode] = useState('full'); 
   const [isProcessing, setIsProcessing] = useState(false);
   const [amountInWords, setAmountInWords] = useState(''); 
@@ -129,6 +129,7 @@ export default function InvoiceMakerApp() {
       
       setTimeout(() => {
           const element = noteRef.current;
+          // Sử dụng paperSize hiện tại (mặc định là 'a4')
           const isA5 = paperSize === 'a5';
           const opt = {
               margin: 5, filename: `${mode==='full'?'HOADON':'PHIEU'}_${invoiceCode}.pdf`,
