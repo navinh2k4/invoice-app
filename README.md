@@ -124,11 +124,13 @@ Copy toàn bộ nội dung code React (file App.jsx) mà tôi đã cung cấp �
 # Bước 2: Cài đặt và Chạy thử
 
 Mở Terminal (Command Prompt) tại thư mục dự án:
+Chạy lệnh npm install để tải thư viện.
 ```
-# Chạy lệnh npm install để tải thư viện.
 npm install
+```
 
 Chạy lệnh npm run dev để chạy thử dưới local.
+```
 npm run dev
 ```
 
