@@ -51,7 +51,6 @@ export default function InvoiceMakerApp() {
   const [date, setDate] = useState(new Date().toLocaleDateString('vi-VN'));
   const [invoiceCode, setInvoiceCode] = useState('HD001');
   
-  // Thông tin thanh toán (Bank Info)
   const [showBankInfo, setShowBankInfo] = useState(true);
   const [bankInfo, setBankInfo] = useState('• Ngân hàng: Agribank\n• Số tài khoản: 5300205625965\n• Chủ tài khoản: NGUYEN THANH TUNG');
 
@@ -75,14 +74,12 @@ export default function InvoiceMakerApp() {
   // --- GEMINI API HELPERS ---
   const callGemini = async (prompt) => {
       let apiKey = "";
-      // Lấy API Key từ biến môi trường (Tương thích Vercel)
       try {
           if (typeof import.meta !== 'undefined' && import.meta.env) {
               apiKey = import.meta.env.VITE_GEMINI_API_KEY;
           }
       } catch (e) { console.warn("Dev mode: Missing env"); }
 
-      // Fallback cho môi trường test nếu không có env
       if (!apiKey) apiKey = ""; 
 
       if (!apiKey) {
@@ -109,27 +106,73 @@ export default function InvoiceMakerApp() {
   // --- AI HANDLERS ---
   const handleSmartImport = async () => {
       if (!importText.trim()) return;
-      setAiStatus("Đang đọc & bóc tách đơn hàng...");
+      setAiStatus("Đang đọc tin nhắn & tách đơn...");
       
-      const prompt = `Trích xuất đơn hàng từ văn bản: "${importText}". Output JSON Array: [{ "name": "...", "unit": "...", "qty": number, "price": number }]`;
+      const prompt = `
+        Bạn là một trợ lý bán hàng thông minh. Nhiệm vụ của bạn là bóc tách thông tin từ tin nhắn đặt hàng.
+        
+        Văn bản đầu vào: "${importText}"
+        
+        Hãy trích xuất các thông tin sau và trả về dưới dạng JSON (chỉ JSON thuần túy, không markdown):
+        1. "customer": Tên khách hàng (nếu có, ví dụ "anh Dũng", nếu không có để null).
+        2. "address": Địa chỉ khách (ví dụ "Quận 7", nếu không có để null).
+        3. "phone": Số điện thoại (nếu có, để null).
+        4. "items": Danh sách hàng hóa.
+           - "name": Tên sản phẩm.
+           - "unit": Đơn vị tính (chai, gói, bao, cái... đoán nếu thiếu).
+           - "qty": Số lượng (Number).
+           - "price": Đơn giá (Number). Hãy tự động đổi "k" thành nghìn (260k -> 260000), "tr" thành triệu. Nếu không có giá để 0.
+        
+        Ví dụ output mong muốn:
+        {
+          "customer": "Anh Dũng",
+          "address": "Quận 7",
+          "phone": null,
+          "items": [
+            { "name": "Anvil", "unit": "Chai", "qty": 10, "price": 260000 }
+          ]
+        }
+      `;
+
       try {
           const res = await callGemini(prompt);
           if (res) {
-              const jsonStr = res.replace(/```json|```/g, '').trim().match(/\[.*\]/s)?.[0] || '[]';
-              const json = JSON.parse(jsonStr);
-              if (json.length) {
-                   const newItems = json.map(i => ({
-                       id: Date.now() + Math.random(),
-                       name: typeof i.name === 'string' ? i.name : 'Sản phẩm mới',
-                       unit: typeof i.unit === 'string' ? i.unit : 'Cái',
-                       qty: Number(i.qty) || 1,
-                       price: Number(i.price) || 0
-                   }));
-                   setItems(prev => [...prev, ...newItems]);
-                   setShowImportModal(false); setImportText('');
+              const jsonStr = res.replace(/```json|```/g, '').trim();
+              const startBrace = jsonStr.indexOf('{');
+              const endBrace = jsonStr.lastIndexOf('}');
+              
+              if (startBrace !== -1 && endBrace !== -1) {
+                  const cleanJson = jsonStr.substring(startBrace, endBrace + 1);
+                  const data = JSON.parse(cleanJson);
+                  
+                  // 1. Cập nhật thông tin khách hàng (nếu AI tìm thấy)
+                  if (data.customer) setCustomerName(data.customer);
+                  if (data.address) setCustomerAddress(data.address);
+                  if (data.phone) setCustomerPhone(data.phone);
+
+                  // 2. Cập nhật danh sách hàng hóa
+                  if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+                       const newItems = data.items.map(i => ({
+                           id: Date.now() + Math.random(),
+                           name: typeof i.name === 'string' ? i.name : 'Sản phẩm mới',
+                           unit: typeof i.unit === 'string' ? i.unit : 'Cái',
+                           qty: Number(i.qty) || 1,
+                           price: Number(i.price) || 0
+                       }));
+                       
+                       // Hỏi người dùng muốn ghi đè hay thêm vào
+                       // Ở đây mình chọn cách thêm vào cho an toàn, nếu muốn reset thì họ có nút Xóa
+                       setItems(prev => [...prev, ...newItems]);
+                       setShowImportModal(false); 
+                       setImportText('');
+                  } else {
+                      alert("Không tìm thấy sản phẩm nào trong tin nhắn.");
+                  }
+              } else {
+                  alert("Không thể đọc hiểu tin nhắn này.");
               }
           }
-      } catch (e) { alert("Lỗi xử lý AI"); } finally { setAiStatus(null); }
+      } catch (e) { console.error(e); alert("Lỗi xử lý AI: " + e.message); } finally { setAiStatus(null); }
   };
 
   const handleGenerateNote = async () => {
@@ -292,7 +335,7 @@ export default function InvoiceMakerApp() {
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
                 <div className="flex justify-between mb-4"><h3 className="font-bold flex gap-2 text-purple-700"><Sparkles/> Nhập AI</h3><button onClick={()=>setShowImportModal(false)}><X/></button></div>
-                <textarea className="w-full border p-3 h-32 rounded outline-none focus:ring-2 focus:ring-purple-200" placeholder='Ví dụ: "Lấy 5 chai thuốc sâu 150k"' value={importText} onChange={e=>setImportText(e.target.value)}></textarea>
+                <textarea className="w-full border p-3 h-32 rounded outline-none focus:ring-2 focus:ring-purple-200" placeholder='Ví dụ: "Lấy cho anh Dũng Quận 7 10 chai Anvil 260k"' value={importText} onChange={e=>setImportText(e.target.value)}></textarea>
                 <div className="flex justify-end gap-2 mt-4"><button onClick={()=>setShowImportModal(false)} className="px-4 py-2 bg-gray-100 rounded">Hủy</button><button onClick={handleSmartImport} disabled={!importText.trim()} className="px-4 py-2 bg-purple-600 text-white rounded">Phân tích</button></div>
             </div>
         </div>
@@ -329,6 +372,7 @@ export default function InvoiceMakerApp() {
             <button onClick={addItem} className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-sm font-bold"><Plus size={16}/> Thêm</button>
             <button onClick={()=>removeItem(items[items.length-1].id)} className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-full text-sm font-bold"><Minus size={16}/> Xóa</button>
             
+            {/* Dropdown chọn khổ giấy */}
             <div className="relative">
                 <div className="flex items-center gap-1 bg-gray-100 px-3 py-1.5 rounded-full text-sm font-bold text-gray-700 cursor-pointer border border-transparent hover:border-gray-300 group">
                     <span>{PAPER_TYPES[paperType]?.name}</span>
