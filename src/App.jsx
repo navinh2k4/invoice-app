@@ -57,8 +57,25 @@ export default function InvoiceMakerApp() {
 
   // --- GEMINI API HELPERS ---
   const callGemini = async (prompt) => {
-      // Khi deploy lên Vercel, hãy dùng: import.meta.env.VITE_GEMINI_API_KEY || "";
-      const apiKey = ""; 
+      // CHUẨN HÓA: Lấy API Key từ biến môi trường (Environment Variable)
+      // Trong Vite, biến môi trường public phải bắt đầu bằng VITE_
+      // Lưu ý: Đoạn code này có thể gây warning trong Preview (Canvas) nhưng là BẮT BUỘC để chạy chuẩn trên Vercel.
+      let apiKey = "";
+      try {
+          // Kiểm tra xem import.meta.env có tồn tại không (tránh lỗi crash trên một số trình duyệt cũ/môi trường test)
+          if (typeof import.meta !== 'undefined' && import.meta.env) {
+              apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+          }
+      } catch (e) {
+          console.warn("Không thể đọc biến môi trường:", e);
+      }
+
+      // Fallback: Nếu không có key trong env (ví dụ đang chạy test), alert nhắc nhở
+      if (!apiKey) {
+          alert("⚠️ CHƯA CẤU HÌNH API KEY!\n\nBạn cần vào Vercel -> Settings -> Environment Variables và thêm:\nKey: VITE_GEMINI_API_KEY\nValue: [Mã API của bạn]");
+          return null;
+      }
+
       try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
             method: 'POST',
@@ -66,9 +83,16 @@ export default function InvoiceMakerApp() {
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         });
         const data = await response.json();
-        if (!data.candidates?.length) throw new Error("No AI response");
+        if (!data.candidates?.length) {
+            console.error("Gemini Error Detail:", data);
+            throw new Error("AI không phản hồi hoặc hết quota.");
+        }
         return data.candidates[0].content.parts[0].text;
-      } catch (error) { console.error("Gemini Error:", error); return null; }
+      } catch (error) { 
+          console.error("Gemini Fetch Error:", error); 
+          alert("Lỗi kết nối AI: " + error.message);
+          return null; 
+      }
   };
 
   // --- AI HANDLERS ---
