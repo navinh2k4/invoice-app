@@ -34,7 +34,7 @@ export default function InvoiceMakerApp() {
   const [exportMode, setExportMode] = useState('full'); 
   const [isProcessing, setIsProcessing] = useState(false);
   const [amountInWords, setAmountInWords] = useState(''); 
-  const [isEditMode, setIsEditMode] = useState(true); // Chế độ chỉnh sửa (Hiện viền ô nhập)
+  const [isEditMode, setIsEditMode] = useState(true); 
 
   // AI States
   const [showImportModal, setShowImportModal] = useState(false);
@@ -48,8 +48,7 @@ export default function InvoiceMakerApp() {
 
   // --- GEMINI API HELPERS ---
   const callGemini = async (prompt) => {
-      // SỬA LỖI: Để chuỗi rỗng để chạy trên Preview. 
-      // Khi deploy lên Vercel, bạn hãy đổi dòng này thành: const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+      // Khi deploy lên Vercel, hãy dùng: import.meta.env.VITE_GEMINI_API_KEY || "";
       const apiKey = ""; 
       try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
@@ -126,7 +125,7 @@ export default function InvoiceMakerApp() {
       if (isProcessing) return;
       setIsProcessing(true);
       setExportMode(mode);
-      setIsEditMode(false); // Tắt chế độ edit để in cho đẹp
+      setIsEditMode(false); 
       
       setTimeout(() => {
           const element = noteRef.current;
@@ -138,13 +137,12 @@ export default function InvoiceMakerApp() {
               jsPDF: { unit: 'mm', format: isA5 ? 'a5' : 'a4', orientation: isA5 ? 'landscape' : 'portrait' }
           };
 
-          const done = () => { setIsProcessing(false); setExportMode('full'); setIsEditMode(true); };
+          const done = () => { setIsProcessing(false); setExportMode('full'); setIsEditMode(true); }; 
 
           if (action === 'print') { 
               window.print(); 
               done(); 
           } else {
-              // Tự động tải thư viện nếu chưa có (dành cho môi trường Preview)
               if (!window.html2pdf) {
                   const script = document.createElement('script');
                   script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
@@ -258,7 +256,7 @@ export default function InvoiceMakerApp() {
                 <div className="flex gap-2 items-center relative">
                     <span className="font-bold w-24 shrink-0">Ghi chú:</span>
                     <input value={note} onChange={(e)=>setNote(e.target.value)} className={`flex-1 outline-none italic pr-8 ${isEditMode ? 'bg-blue-50 px-1 rounded' : 'bg-transparent border-b border-dotted border-gray-400'}`} placeholder="Ghi chú đơn hàng"/>
-                    <button onClick={handleGenerateNote} disabled={isNoteLoading} className="absolute right-0 text-purple-500 print:hidden opacity-50 hover:opacity-100">{isNoteLoading ? <RefreshCw size={14} className="animate-spin"/> : <Sparkles size={14}/>}</button>
+                    <button onClick={handleGenerateNote} data-html2canvas-ignore="true" disabled={isNoteLoading} className="absolute right-0 text-purple-500 print:hidden opacity-50 hover:opacity-100">{isNoteLoading ? <RefreshCw size={14} className="animate-spin"/> : <Sparkles size={14}/>}</button>
                 </div>
             </div>
 
@@ -269,13 +267,13 @@ export default function InvoiceMakerApp() {
                         <th className="border border-gray-400 p-2 w-10 text-center">STT</th>
                         <th className="border border-gray-400 p-2 text-left relative">
                             Tên sản phẩm 
-                            <button onClick={handleFixProductNames} disabled={isFixingNames} className="absolute right-1 top-1 text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><Wand2 size={14}/></button>
+                            <button onClick={handleFixProductNames} data-html2canvas-ignore="true" disabled={isFixingNames} className="absolute right-1 top-1 text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><Wand2 size={14}/></button>
                         </th>
                         <th className="border border-gray-400 p-2 w-16 text-center">ĐVT</th>
                         <th className="border border-gray-400 p-2 w-16 text-center">SL</th>
                         {exportMode === 'full' && <><th className="border border-gray-400 p-2 w-24 text-right">Đơn giá</th><th className="border border-gray-400 p-2 w-28 text-right">Thành tiền</th></>}
                         {exportMode === 'delivery' && <th className="border border-gray-400 p-2 w-32 text-center">Thực nhận</th>}
-                        <th className="border border-gray-400 p-2 w-8 print:hidden"></th>
+                        <th className="border border-gray-400 p-2 w-8 print:hidden" data-html2canvas-ignore="true"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -290,7 +288,7 @@ export default function InvoiceMakerApp() {
                                 <td className="border border-gray-400 p-2 text-right">{formatCurrency(item.qty * item.price)}</td>
                             </>}
                             {exportMode === 'delivery' && <td className="border border-gray-400 p-2"></td>}
-                            <td className="border border-gray-400 p-1 text-center print:hidden"><button onClick={()=>removeItem(item.id)} className="text-gray-300 hover:text-red-500"><Trash2 size={14}/></button></td>
+                            <td className="border border-gray-400 p-1 text-center print:hidden" data-html2canvas-ignore="true"><button onClick={()=>removeItem(item.id)} className="text-gray-300 hover:text-red-500"><Trash2 size={14}/></button></td>
                         </tr>
                     ))}
                     <tr className="bg-gray-100 font-bold border-t-2 border-gray-800">
@@ -299,7 +297,7 @@ export default function InvoiceMakerApp() {
                         <td className="border border-gray-400 p-2 text-center text-lg">{totalQty}</td>
                         {exportMode === 'full' && <><td className="border border-gray-400 p-2"></td><td className="border border-gray-400 p-2 text-right text-lg text-blue-800">{formatCurrency(totalPrice)}</td></>}
                         {exportMode === 'delivery' && <td className="border border-gray-400 p-2"></td>}
-                        <td className="border border-gray-400 p-2 print:hidden"></td>
+                        <td className="border border-gray-400 p-2 print:hidden" data-html2canvas-ignore="true"></td>
                     </tr>
                 </tbody>
             </table>
@@ -311,7 +309,7 @@ export default function InvoiceMakerApp() {
                     <div className="text-sm italic flex gap-2 items-center mb-2">
                         <span className="font-bold not-italic">Bằng chữ:</span>
                         <span className="flex-1 border-b border-dotted border-gray-400 pb-1">{amountInWords || '...................................................'}</span>
-                        <button onClick={handleNumberToWords} disabled={isWordsLoading || totalPrice === 0} className="text-purple-600 bg-purple-50 border px-2 py-0.5 rounded text-xs font-bold print:hidden flex gap-1 items-center hover:bg-purple-100">{isWordsLoading ? '...' : <><Sparkles size={10}/> AI</>}</button>
+                        <button onClick={handleNumberToWords} data-html2canvas-ignore="true" disabled={isWordsLoading || totalPrice === 0} className="text-purple-600 bg-purple-50 border px-2 py-0.5 rounded text-xs font-bold print:hidden flex gap-1 items-center hover:bg-purple-100">{isWordsLoading ? '...' : <><Sparkles size={10}/> AI</>}</button>
                     </div>
 
                     {/* Thông tin chuyển khoản (Editable) */}
