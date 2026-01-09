@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown } from 'lucide-react';
 
-// Cấu hình các khổ giấy
+// Cấu hình các khổ giấy phổ biến
 const PAPER_TYPES = {
   'a4': { name: 'A4 (Dọc)', format: 'a4', orientation: 'portrait', width: '210mm', height: '297mm', previewWidth: '190mm' },
   'a5_land': { name: 'A5 (Ngang)', format: 'a5', orientation: 'landscape', width: '210mm', height: '148mm', previewWidth: '190mm' },
@@ -51,10 +51,11 @@ export default function InvoiceMakerApp() {
   const [date, setDate] = useState(new Date().toLocaleDateString('vi-VN'));
   const [invoiceCode, setInvoiceCode] = useState('HD001');
   
+  // Thông tin thanh toán (Bank Info)
   const [showBankInfo, setShowBankInfo] = useState(true);
   const [bankInfo, setBankInfo] = useState('• Ngân hàng: Agribank\n• Số tài khoản: 5300205625965\n• Chủ tài khoản: NGUYEN THANH TUNG');
 
-  // SỬA LỖI: Đồng nhất tên biến state thành 'paperType'
+  // Cấu hình & Trạng thái
   const [paperType, setPaperType] = useState('a4'); 
   const [exportMode, setExportMode] = useState('full'); 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -66,15 +67,29 @@ export default function InvoiceMakerApp() {
   const [showMsgModal, setShowMsgModal] = useState(false);
   const [importText, setImportText] = useState('');
   const [generatedMsg, setGeneratedMsg] = useState('');
-  const [aiStatus, setAiStatus] = useState(null);
+  const [aiStatus, setAiStatus] = useState(null); // null = ko chạy, string = message đang chạy
   const [copied, setCopied] = useState(false);
   
   const noteRef = useRef(null);
 
   // --- GEMINI API HELPERS ---
   const callGemini = async (prompt) => {
-      // Khi deploy, dùng: import.meta.env.VITE_GEMINI_API_KEY || "";
-      const apiKey = ""; 
+      let apiKey = "";
+      // Lấy API Key từ biến môi trường (Tương thích Vercel)
+      try {
+          if (typeof import.meta !== 'undefined' && import.meta.env) {
+              apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+          }
+      } catch (e) { console.warn("Dev mode: Missing env"); }
+
+      // Fallback cho môi trường test nếu không có env
+      if (!apiKey) apiKey = ""; 
+
+      if (!apiKey) {
+          alert("⚠️ Chưa cấu hình API Key! Vui lòng thêm VITE_GEMINI_API_KEY vào biến môi trường.");
+          return null;
+      }
+
       try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
             method: 'POST',
@@ -84,7 +99,11 @@ export default function InvoiceMakerApp() {
         const data = await response.json();
         if (!data.candidates?.length) throw new Error("No AI response");
         return data.candidates[0].content.parts[0].text;
-      } catch (error) { console.error("Gemini Error:", error); return null; }
+      } catch (error) { 
+          console.error("Gemini Error:", error); 
+          alert("Lỗi kết nối AI: " + error.message);
+          return null; 
+      }
   };
 
   // --- AI HANDLERS ---
@@ -99,7 +118,6 @@ export default function InvoiceMakerApp() {
               const jsonStr = res.replace(/```json|```/g, '').trim().match(/\[.*\]/s)?.[0] || '[]';
               const json = JSON.parse(jsonStr);
               if (json.length) {
-                   // SỬA LỖI: Sanitize dữ liệu để tránh lỗi render object
                    const newItems = json.map(i => ({
                        id: Date.now() + Math.random(),
                        name: typeof i.name === 'string' ? i.name : 'Sản phẩm mới',
@@ -111,7 +129,7 @@ export default function InvoiceMakerApp() {
                    setShowImportModal(false); setImportText('');
               }
           }
-      } catch (e) { console.error(e); alert("Lỗi xử lý AI"); } finally { setAiStatus(null); }
+      } catch (e) { alert("Lỗi xử lý AI"); } finally { setAiStatus(null); }
   };
 
   const handleGenerateNote = async () => {
@@ -134,11 +152,20 @@ export default function InvoiceMakerApp() {
   const handleFixProductNames = async () => {
       setAiStatus("Đang sửa lỗi chính tả & viết hoa...");
       const names = items.map(i => i.name);
-      const res = await callGemini(`Chuẩn hóa tên (Viết Hoa Chữ Đầu, Sửa Chính Tả): ${JSON.stringify(names)}. Trả về JSON Array string.`);
+      // Prompt rõ ràng yêu cầu mảng chuỗi
+      const res = await callGemini(`Chuẩn hóa tên (Viết Hoa Chữ Đầu, Sửa Chính Tả): ${JSON.stringify(names)}. Trả về JSON Array of Strings.`);
       if (res) {
-          const jsonStr = res.replace(/```json|```/g, '').trim().match(/\[.*\]/s)?.[0] || '[]';
-          const fixed = JSON.parse(jsonStr);
-          if (fixed.length === items.length) setItems(items.map((it, idx) => ({ ...it, name: fixed[idx] || it.name })));
+          try {
+            const jsonStr = res.replace(/```json|```/g, '').trim().match(/\[.*\]/s)?.[0] || '[]';
+            const fixed = JSON.parse(jsonStr);
+            if (fixed.length === items.length) {
+                setItems(items.map((it, idx) => ({ 
+                    ...it, 
+                    // Kiểm tra kỹ kiểu dữ liệu trả về để tránh lỗi Object
+                    name: (typeof fixed[idx] === 'string') ? fixed[idx] : (fixed[idx]?.name || it.name) 
+                })));
+            }
+          } catch(e) { console.error("Parse error", e); }
       }
       setAiStatus(null);
   };
@@ -185,7 +212,7 @@ export default function InvoiceMakerApp() {
 
       setTimeout(() => {
           const element = noteRef.current;
-          const config = PAPER_TYPES[paperType]; // Đã sửa: dùng paperType
+          const config = PAPER_TYPES[paperType];
           const filename = `HoaDon_${invoiceCode}.pdf`;
           
           const opt = {
@@ -232,7 +259,7 @@ export default function InvoiceMakerApp() {
       
       setTimeout(() => {
           const element = noteRef.current;
-          const config = PAPER_TYPES[paperType]; // Đã sửa: dùng paperType
+          const config = PAPER_TYPES[paperType];
           const opt = {
               margin: 5, filename: `${mode==='full'?'HOADON':'PHIEU'}_${invoiceCode}.pdf`,
               image: { type: 'jpeg', quality: 1 },
@@ -275,7 +302,10 @@ export default function InvoiceMakerApp() {
       {showMsgModal && (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-                <div className="flex justify-between mb-4"><h3 className="font-bold flex gap-2 text-blue-600"><MessageCircle/> Soạn Tin Nhắn</h3><button onClick={()=>setShowMsgModal(false)}><X/></button></div>
+                <div className="flex justify-between mb-4">
+                    <h3 className="font-bold flex gap-2 text-blue-600"><MessageCircle/> Soạn Tin Nhắn</h3>
+                    <button onClick={()=>setShowMsgModal(false)}><X/></button>
+                </div>
                 <div className="relative">
                     <textarea readOnly className="w-full border p-3 h-48 rounded outline-none bg-gray-50 text-sm font-medium" value={generatedMsg}></textarea>
                     <button onClick={copyToClipboard} className="absolute bottom-2 right-2 flex items-center gap-1 bg-white border shadow px-2 py-1 rounded text-xs font-bold text-gray-700 hover:bg-gray-100">
@@ -385,7 +415,7 @@ export default function InvoiceMakerApp() {
                 <div className="flex gap-2 items-center relative">
                     <span className="font-bold w-24 shrink-0">Ghi chú:</span>
                     <input value={note} onChange={(e)=>setNote(e.target.value)} className={`flex-1 outline-none italic pr-8 ${isEditMode ? 'bg-blue-50 px-1 rounded' : 'bg-transparent border-b border-dotted border-gray-400'}`} placeholder="Ghi chú đơn hàng"/>
-                    <button onClick={handleGenerateNote} data-html2canvas-ignore="true" className="absolute right-0 text-purple-500 print:hidden opacity-50 hover:opacity-100"><Sparkles size={14}/></button>
+                    <button onClick={handleGenerateNote} disabled={aiStatus !== null} data-html2canvas-ignore="true" className="absolute right-0 text-purple-500 print:hidden opacity-50 hover:opacity-100"><Sparkles size={14}/></button>
                 </div>
             </div>
 
@@ -396,7 +426,7 @@ export default function InvoiceMakerApp() {
                         <th className="border border-gray-400 p-2 w-10 text-center">STT</th>
                         <th className="border border-gray-400 p-2 text-left relative">
                             Tên sản phẩm 
-                            <button onClick={handleFixProductNames} data-html2canvas-ignore="true" className="absolute right-1 top-1 text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><Wand2 size={14}/></button>
+                            <button onClick={handleFixProductNames} disabled={aiStatus !== null} data-html2canvas-ignore="true" className="absolute right-1 top-1 text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><Wand2 size={14}/></button>
                         </th>
                         <th className="border border-gray-400 p-2 w-16 text-center">ĐVT</th>
                         <th className="border border-gray-400 p-2 w-16 text-center">SL</th>
@@ -438,7 +468,7 @@ export default function InvoiceMakerApp() {
                     <div className="text-sm italic flex gap-2 items-center mb-2">
                         <span className="font-bold not-italic">Bằng chữ:</span>
                         <span className="flex-1 border-b border-dotted border-gray-400 pb-1">{amountInWords || '...................................................'}</span>
-                        <button onClick={handleNumberToWords} data-html2canvas-ignore="true" className="text-purple-600 bg-purple-50 border px-2 py-0.5 rounded text-xs font-bold print:hidden flex gap-1 items-center hover:bg-purple-100"><Sparkles size={10}/> AI</button>
+                        <button onClick={handleNumberToWords} disabled={aiStatus !== null || totalPrice === 0} data-html2canvas-ignore="true" className="text-purple-600 bg-purple-50 border px-2 py-0.5 rounded text-xs font-bold print:hidden flex gap-1 items-center hover:bg-purple-100"><Sparkles size={10}/> AI</button>
                     </div>
 
                     {/* Thông tin chuyển khoản (Editable) */}
