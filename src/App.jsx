@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye } from 'lucide-react';
+import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2 } from 'lucide-react';
 
 export default function InvoiceMakerApp() {
   // --- STATE DỮ LIỆU ---
@@ -9,27 +9,22 @@ export default function InvoiceMakerApp() {
     { id: 3, name: 'Nutri active APN 500ml', unit: 'Chai', qty: 24, price: 120000 },
   ];
 
-  // Thông tin cửa hàng (Editable)
   const [shopName, setShopName] = useState('ĐẠI LÝ THÀNH ĐẠT');
   const [shopPhone, setShopPhone] = useState('0357041668');
   const [shopAddress, setShopAddress] = useState('Số 125, DT685, xã Kiến Đức, tỉnh Lâm Đồng');
 
-  // Thông tin khách hàng (Extended)
   const [customerName, setCustomerName] = useState('Khách Sỉ');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   
-  // Thông tin chung
   const [items, setItems] = useState(initialData);
   const [note, setNote] = useState('Kiểm hàng kỹ trước khi nhận');
   const [date, setDate] = useState(new Date().toLocaleDateString('vi-VN'));
   const [invoiceCode, setInvoiceCode] = useState('HD001');
   
-  // Thông tin thanh toán (Bank Info) - ĐÃ CẬP NHẬT THEO YÊU CẦU
   const [showBankInfo, setShowBankInfo] = useState(true);
   const [bankInfo, setBankInfo] = useState('• Ngân hàng: Agribank\n• Số tài khoản: 5300205625965\n• Chủ tài khoản: NGUYEN THANH TUNG');
 
-  // Cấu hình & Trạng thái - ĐÃ CẬP NHẬT MẶC ĐỊNH A4
   const [paperSize, setPaperSize] = useState('a4'); 
   const [exportMode, setExportMode] = useState('full'); 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -38,17 +33,20 @@ export default function InvoiceMakerApp() {
 
   // AI States
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showMsgModal, setShowMsgModal] = useState(false);
   const [importText, setImportText] = useState('');
+  const [generatedMsg, setGeneratedMsg] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isNoteLoading, setIsNoteLoading] = useState(false);
   const [isWordsLoading, setIsWordsLoading] = useState(false);
+  const [isMsgLoading, setIsMsgLoading] = useState(false);
   const [isFixingNames, setIsFixingNames] = useState(false);
+  const [copied, setCopied] = useState(false);
   
   const noteRef = useRef(null);
 
   // --- GEMINI API HELPERS ---
   const callGemini = async (prompt) => {
-      // Khi deploy lên Vercel, hãy dùng: import.meta.env.VITE_GEMINI_API_KEY || "";
       const apiKey = ""; 
       try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
@@ -107,6 +105,39 @@ export default function InvoiceMakerApp() {
       setIsFixingNames(false);
   };
 
+  const handleDraftMessage = async () => {
+      setIsMsgLoading(true);
+      setShowMsgModal(true);
+      setGeneratedMsg("Đang soạn tin nhắn...");
+      
+      const total = items.reduce((s, i) => s + (i.qty * i.price), 0);
+      const totalFormatted = formatCurrency(total);
+      
+      const prompt = `
+        Hãy đóng vai chủ cửa hàng "${shopName}", soạn một tin nhắn Zalo ngắn gọn, lịch sự gửi cho khách hàng "${customerName}".
+        Thông tin cần có:
+        - Thông báo đã lên đơn hàng mã ${invoiceCode}.
+        - Tổng số tiền cần thanh toán: ${totalFormatted}.
+        - Thông tin chuyển khoản: "${bankInfo.replace(/\n/g, ', ')}".
+        Yêu cầu:
+        - Giọng điệu thân thiện, chuyên nghiệp.
+        - Trình bày rõ ràng, dễ đọc trên điện thoại.
+        - Kết thúc bằng lời cảm ơn.
+        - Chỉ trả về nội dung tin nhắn.
+      `;
+
+      const res = await callGemini(prompt);
+      if (res) setGeneratedMsg(res.trim());
+      else setGeneratedMsg("Không thể soạn tin nhắn lúc này.");
+      setIsMsgLoading(false);
+  };
+
+  const copyToClipboard = () => {
+      navigator.clipboard.writeText(generatedMsg);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+  };
+
   // --- DATA HANDLERS ---
   const totalQty = items.reduce((s, i) => s + Number(i.qty), 0);
   const totalPrice = items.reduce((s, i) => s + (Number(i.qty) * Number(i.price)), 0);
@@ -120,6 +151,77 @@ export default function InvoiceMakerApp() {
   const removeItem = (id) => { setItems(prev => prev.length===1 ? [{id: Date.now(), name:'', unit:'', qty:1, price:0}] : prev.filter(i=>i.id!==id)); setAmountInWords(''); };
   const resetData = () => { if(confirm("Xóa dữ liệu?")) { setItems([{ id: Date.now(), name: '', unit: '', qty: 1, price: 0 }]); setAmountInWords(''); setCustomerName(''); setCustomerPhone(''); setCustomerAddress(''); } };
 
+  // --- SMART SHARE ZALO (NEW) ---
+  const handleShareZalo = () => {
+      if (isProcessing) return;
+      setIsProcessing(true);
+      setIsEditMode(false); // Tắt edit mode để chụp ảnh đẹp
+
+      setTimeout(() => {
+          const element = noteRef.current;
+          const isA5 = paperSize === 'a5';
+          const filename = `HoaDon_${invoiceCode}.pdf`;
+          
+          const opt = {
+              margin: 5, filename: filename,
+              image: { type: 'jpeg', quality: 1 },
+              html2canvas: { scale: 2, useCORS: true },
+              jsPDF: { unit: 'mm', format: isA5 ? 'a5' : 'a4', orientation: isA5 ? 'landscape' : 'portrait' }
+          };
+
+          // Hàm xử lý sau khi có PDF blob
+          const processBlob = (blob) => {
+              const file = new File([blob], filename, { type: 'application/pdf' });
+              
+              // 1. Nếu trình duyệt hỗ trợ chia sẻ File (Mobile)
+              if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                  navigator.share({
+                      files: [file],
+                      title: 'Gửi hóa đơn',
+                      text: `Gửi bạn hóa đơn ${invoiceCode}. Tổng tiền: ${formatCurrency(totalPrice)}`
+                  })
+                  .then(() => alert("Đã chia sẻ thành công!"))
+                  .catch((e) => console.log("Hủy chia sẻ", e))
+                  .finally(() => {
+                      setIsProcessing(false); 
+                      setIsEditMode(true);
+                  });
+              } 
+              // 2. Nếu là Desktop (Thường không share file trực tiếp được) -> Tải về + Copy tin nhắn
+              else {
+                  // Tải file về
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = filename;
+                  a.click();
+                  URL.revokeObjectURL(url);
+
+                  // Copy nội dung tin nhắn sẵn
+                  const msg = `Gửi bạn hóa đơn ${invoiceCode}.\nTổng tiền: ${formatCurrency(totalPrice)}\n\n${bankInfo}`;
+                  navigator.clipboard.writeText(msg);
+
+                  alert("Đã tải file PDF về máy và COPY sẵn tin nhắn.\n\nBạn hãy mở Zalo PC -> Dán tin nhắn (Ctrl+V) và Kéo file PDF vào để gửi nhé!");
+                  setIsProcessing(false);
+                  setIsEditMode(true);
+              }
+          };
+
+          if (window.html2pdf) {
+              // Sử dụng .output('blob') để lấy dữ liệu file thay vì .save()
+              window.html2pdf().set(opt).from(element).output('blob').then(processBlob);
+          } else {
+              // Load thư viện nếu chưa có
+              const script = document.createElement('script');
+              script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+              script.onload = () => {
+                  window.html2pdf().set(opt).from(element).output('blob').then(processBlob);
+              };
+              document.body.appendChild(script);
+          }
+      }, 500);
+  };
+
   // --- EXPORT ---
   const handleExport = (mode, action) => {
       if (isProcessing) return;
@@ -129,7 +231,6 @@ export default function InvoiceMakerApp() {
       
       setTimeout(() => {
           const element = noteRef.current;
-          // Sử dụng paperSize hiện tại (mặc định là 'a4')
           const isA5 = paperSize === 'a5';
           const opt = {
               margin: 5, filename: `${mode==='full'?'HOADON':'PHIEU'}_${invoiceCode}.pdf`,
@@ -149,10 +250,6 @@ export default function InvoiceMakerApp() {
                   script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
                   script.onload = () => {
                       window.html2pdf().set(opt).from(element).save().then(done).catch(done);
-                  };
-                  script.onerror = () => {
-                      alert("Không tải được thư viện PDF. Vui lòng dùng nút IN.");
-                      done();
                   };
                   document.body.appendChild(script);
               } else {
@@ -176,26 +273,53 @@ export default function InvoiceMakerApp() {
         </div>
       )}
 
+      {/* --- MODAL MESSAGE --- */}
+      {showMsgModal && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+                <div className="flex justify-between mb-4">
+                    <h3 className="font-bold flex gap-2 text-blue-600"><MessageCircle/> Soạn Tin Nhắn</h3>
+                    <button onClick={()=>setShowMsgModal(false)}><X/></button>
+                </div>
+                {isMsgLoading ? (
+                    <div className="flex items-center justify-center h-32 text-gray-500 gap-2"><RefreshCw className="animate-spin"/> Đang viết...</div>
+                ) : (
+                    <div className="relative">
+                        <textarea readOnly className="w-full border p-3 h-48 rounded outline-none bg-gray-50 text-sm font-medium" value={generatedMsg}></textarea>
+                        <button onClick={copyToClipboard} className="absolute bottom-2 right-2 flex items-center gap-1 bg-white border shadow px-2 py-1 rounded text-xs font-bold text-gray-700 hover:bg-gray-100">
+                            {copied ? <Check size={14} className="text-green-600"/> : <Copy size={14}/>} {copied ? 'Đã chép' : 'Sao chép'}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+      )}
+
       {/* --- TOOLBAR --- */}
       <div className="w-full max-w-5xl bg-white p-3 rounded-lg shadow-md mb-6 print:hidden border sticky top-0 z-50 flex flex-wrap justify-between items-center gap-2">
         <div className="flex flex-wrap gap-2 items-center">
-            {/* Nút bật tắt chế độ Edit */}
             <button onClick={() => setIsEditMode(!isEditMode)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-bold border transition-colors ${isEditMode ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-600'}`}>
-                {isEditMode ? <><Edit3 size={16}/> Đang sửa</> : <><Eye size={16}/> Xem trước</>}
+                {isEditMode ? <><Edit3 size={16}/> Sửa</> : <><Eye size={16}/> Xem</>}
             </button>
             <div className="h-6 w-px bg-gray-300 mx-1"></div>
             
-            <button onClick={() => setShowImportModal(true)} className="flex items-center gap-1 px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-sm font-bold"><Sparkles size={16}/> AI</button>
+            <button onClick={() => setShowImportModal(true)} className="flex items-center gap-1 px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-sm font-bold"><Sparkles size={16}/> Nhập</button>
+            <button onClick={handleDraftMessage} className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-sm font-bold"><MessageCircle size={16}/> Soạn Tin</button>
             <button onClick={addItem} className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-sm font-bold"><Plus size={16}/> Thêm</button>
             <button onClick={()=>removeItem(items[items.length-1].id)} className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-full text-sm font-bold"><Minus size={16}/> Xóa</button>
              <div className="flex bg-gray-100 rounded p-1">
-                <button onClick={() => setPaperSize('a5')} className={`px-2 py-1 text-xs rounded ${paperSize === 'a5' ? 'bg-white shadow font-bold text-blue-600' : 'text-gray-500'}`}>A5 Ngang</button>
-                <button onClick={() => setPaperSize('a4')} className={`px-2 py-1 text-xs rounded ${paperSize === 'a4' ? 'bg-white shadow font-bold text-blue-600' : 'text-gray-500'}`}>A4 Dọc</button>
+                <button onClick={() => setPaperSize('a5')} className={`px-2 py-1 text-xs rounded ${paperSize === 'a5' ? 'bg-white shadow font-bold text-blue-600' : 'text-gray-500'}`}>A5</button>
+                <button onClick={() => setPaperSize('a4')} className={`px-2 py-1 text-xs rounded ${paperSize === 'a4' ? 'bg-white shadow font-bold text-blue-600' : 'text-gray-500'}`}>A4</button>
             </div>
              <button onClick={() => setShowBankInfo(!showBankInfo)} className={`p-2 rounded ${showBankInfo ? 'text-blue-600 bg-blue-50' : 'text-gray-400'}`} title="Bật/Tắt Thông tin Ngân hàng"><Settings size={18}/></button>
              <button onClick={resetData} className="text-gray-500 p-2"><RefreshCw size={18}/></button>
         </div>
         <div className="flex gap-2">
+             {/* Nút Gửi Zalo/Share Mới */}
+             <button onClick={handleShareZalo} disabled={isProcessing} className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded text-sm font-medium flex gap-1 items-center shadow-sm">
+                <Share2 size={16}/> <span className="hidden sm:inline">Gửi Zalo</span>
+            </button>
+
              <div className="flex bg-blue-50 rounded-lg p-1 border border-blue-100">
                 <button onClick={() => handleExport('delivery', 'pdf')} disabled={isProcessing} className="px-3 py-1.5 text-blue-700 text-sm font-medium flex gap-1"><FileDown size={16}/> Kho</button>
                 <div className="w-px bg-blue-200 mx-1"></div>
