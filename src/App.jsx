@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown } from 'lucide-react';
+import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown, Bot } from 'lucide-react';
 
-// Cấu hình các khổ giấy phổ biến
+// Cấu hình các khổ giấy
 const PAPER_TYPES = {
   'a4': { name: 'A4 (Dọc)', format: 'a4', orientation: 'portrait', width: '210mm', height: '297mm', previewWidth: '190mm' },
   'a5_land': { name: 'A5 (Ngang)', format: 'a5', orientation: 'landscape', width: '210mm', height: '148mm', previewWidth: '190mm' },
@@ -9,6 +9,28 @@ const PAPER_TYPES = {
   'letter': { name: 'Letter (Mỹ)', format: 'letter', orientation: 'portrait', width: '216mm', height: '279mm', previewWidth: '196mm' },
   'legal': { name: 'Legal (Mỹ)', format: 'legal', orientation: 'portrait', width: '216mm', height: '356mm', previewWidth: '196mm' },
 };
+
+// --- COMPONENT LOAD AI XỊN XÒ (MỚI) ---
+const AILoader = ({ message }) => (
+  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center animate-in fade-in duration-200">
+    <div className="bg-white/90 p-6 rounded-2xl shadow-2xl border border-purple-100 flex flex-col items-center gap-4 max-w-sm w-full mx-4">
+      <div className="relative">
+        {/* Vòng xoay bên ngoài */}
+        <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+        {/* Icon AI lấp lánh ở giữa */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Sparkles size={24} className="text-purple-600 animate-pulse" />
+        </div>
+      </div>
+      <div className="text-center">
+        <h3 className="text-lg font-bold text-gray-800 bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+          Gemini AI Đang Xử Lý
+        </h3>
+        <p className="text-sm text-gray-600 mt-1 font-medium animate-pulse">{message || "Đang phân tích dữ liệu..."}</p>
+      </div>
+    </div>
+  </div>
+);
 
 export default function InvoiceMakerApp() {
   // --- STATE DỮ LIỆU ---
@@ -34,48 +56,28 @@ export default function InvoiceMakerApp() {
   const [showBankInfo, setShowBankInfo] = useState(true);
   const [bankInfo, setBankInfo] = useState('• Ngân hàng: Agribank\n• Số tài khoản: 5300205625965\n• Chủ tài khoản: NGUYEN THANH TUNG');
 
-  // Cấu hình giấy (Mặc định A4)
-  const [paperType, setPaperType] = useState('a4'); 
+  const [paperSize, setPaperSize] = useState('a4'); 
   const [exportMode, setExportMode] = useState('full'); 
   const [isProcessing, setIsProcessing] = useState(false);
   const [amountInWords, setAmountInWords] = useState(''); 
   const [isEditMode, setIsEditMode] = useState(true); 
 
-  // AI States
+  // AI States & UI
   const [showImportModal, setShowImportModal] = useState(false);
   const [showMsgModal, setShowMsgModal] = useState(false);
   const [importText, setImportText] = useState('');
   const [generatedMsg, setGeneratedMsg] = useState('');
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [isNoteLoading, setIsNoteLoading] = useState(false);
-  const [isWordsLoading, setIsWordsLoading] = useState(false);
-  const [isMsgLoading, setIsMsgLoading] = useState(false);
-  const [isFixingNames, setIsFixingNames] = useState(false);
+  
+  // Trạng thái AI Loading tập trung (Thay thế các biến loading lẻ tẻ để hiện overlay)
+  const [aiStatus, setAiStatus] = useState(null); // null = ko chạy, string = message đang chạy
   const [copied, setCopied] = useState(false);
   
   const noteRef = useRef(null);
 
   // --- GEMINI API HELPERS ---
   const callGemini = async (prompt) => {
-      // CHUẨN HÓA: Lấy API Key từ biến môi trường (Environment Variable)
-      // Trong Vite, biến môi trường public phải bắt đầu bằng VITE_
-      // Lưu ý: Đoạn code này có thể gây warning trong Preview (Canvas) nhưng là BẮT BUỘC để chạy chuẩn trên Vercel.
-      let apiKey = "";
-      try {
-          // Kiểm tra xem import.meta.env có tồn tại không (tránh lỗi crash trên một số trình duyệt cũ/môi trường test)
-          if (typeof import.meta !== 'undefined' && import.meta.env) {
-              apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-          }
-      } catch (e) {
-          console.warn("Không thể đọc biến môi trường:", e);
-      }
-
-      // Fallback: Nếu không có key trong env (ví dụ đang chạy test), alert nhắc nhở
-      if (!apiKey) {
-          alert("⚠️ CHƯA CẤU HÌNH API KEY!\n\nBạn cần vào Vercel -> Settings -> Environment Variables và thêm:\nKey: VITE_GEMINI_API_KEY\nValue: [Mã API của bạn]");
-          return null;
-      }
-
+      // Khi deploy, dùng: import.meta.env.VITE_GEMINI_API_KEY || "";
+      const apiKey = ""; 
       try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
             method: 'POST',
@@ -83,22 +85,16 @@ export default function InvoiceMakerApp() {
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         });
         const data = await response.json();
-        if (!data.candidates?.length) {
-            console.error("Gemini Error Detail:", data);
-            throw new Error("AI không phản hồi hoặc hết quota.");
-        }
+        if (!data.candidates?.length) throw new Error("No AI response");
         return data.candidates[0].content.parts[0].text;
-      } catch (error) { 
-          console.error("Gemini Fetch Error:", error); 
-          alert("Lỗi kết nối AI: " + error.message);
-          return null; 
-      }
+      } catch (error) { console.error("Gemini Error:", error); return null; }
   };
 
-  // --- AI HANDLERS ---
+  // --- AI HANDLERS (Cập nhật để dùng AILoader) ---
   const handleSmartImport = async () => {
       if (!importText.trim()) return;
-      setIsAiLoading(true);
+      setAiStatus("Đang đọc & bóc tách đơn hàng..."); // Bật hiệu ứng load
+      
       const prompt = `Trích xuất đơn hàng từ văn bản: "${importText}". Output JSON Array: [{ "name": "...", "unit": "...", "qty": number, "price": number }]`;
       try {
           const res = await callGemini(prompt);
@@ -109,41 +105,39 @@ export default function InvoiceMakerApp() {
                    setShowImportModal(false); setImportText('');
               }
           }
-      } catch (e) { alert("Lỗi xử lý AI"); } finally { setIsAiLoading(false); }
+      } catch (e) { alert("Lỗi xử lý AI"); } finally { setAiStatus(null); }
   };
 
   const handleGenerateNote = async () => {
-      setIsNoteLoading(true);
+      setAiStatus("Đang suy nghĩ lời chúc hay...");
       const itemsStr = items.map(i => i.name).join(", ");
       const res = await callGemini(`Viết lời nhắn ngắn (dưới 15 từ) cho khách "${customerName}" mua: ${itemsStr}. Mục đích: Cảm ơn/Dặn dò.`);
       if (res) setNote(res.trim());
-      setIsNoteLoading(false);
+      setAiStatus(null);
   };
 
   const handleNumberToWords = async () => {
       const total = items.reduce((s, i) => s + (i.qty * i.price), 0);
       if (total === 0) return;
-      setIsWordsLoading(true);
+      setAiStatus("Đang đọc số tiền thành chữ...");
       const res = await callGemini(`Đọc số tiền ${total} thành chữ tiếng Việt (viết hoa đầu, kết thúc 'đồng').`);
       if (res) setAmountInWords(res.trim());
-      setIsWordsLoading(false);
+      setAiStatus(null);
   };
 
   const handleFixProductNames = async () => {
-      setIsFixingNames(true);
+      setAiStatus("Đang sửa lỗi chính tả & viết hoa...");
       const names = items.map(i => i.name);
       const res = await callGemini(`Chuẩn hóa tên (Viết Hoa Chữ Đầu, Sửa Chính Tả): ${JSON.stringify(names)}. Trả về JSON Array string.`);
       if (res) {
           const fixed = JSON.parse(res.replace(/```json|```/g, '').trim().match(/\[.*\]/s)?.[0] || '[]');
           if (fixed.length === items.length) setItems(items.map((it, idx) => ({ ...it, name: fixed[idx] || it.name })));
       }
-      setIsFixingNames(false);
+      setAiStatus(null);
   };
 
   const handleDraftMessage = async () => {
-      setIsMsgLoading(true);
-      setShowMsgModal(true);
-      setGeneratedMsg("Đang soạn tin nhắn...");
+      setAiStatus("Đang soạn tin nhắn Zalo...");
       
       const total = items.reduce((s, i) => s + (i.qty * i.price), 0);
       const totalFormatted = formatCurrency(total);
@@ -162,9 +156,14 @@ export default function InvoiceMakerApp() {
       `;
 
       const res = await callGemini(prompt);
-      if (res) setGeneratedMsg(res.trim());
-      else setGeneratedMsg("Không thể soạn tin nhắn lúc này.");
-      setIsMsgLoading(false);
+      setAiStatus(null); // Tắt load xong mới hiện modal
+      
+      if (res) {
+          setGeneratedMsg(res.trim());
+          setShowMsgModal(true);
+      } else {
+          alert("AI đang bận, vui lòng thử lại!");
+      }
   };
 
   const copyToClipboard = () => {
@@ -289,13 +288,16 @@ export default function InvoiceMakerApp() {
   return (
     <div className="flex flex-col items-center min-h-screen bg-gray-100 p-4 font-sans print:bg-white print:p-0">
       
+      {/* --- AI LOADING OVERLAY (HIỆU ỨNG MỚI) --- */}
+      {aiStatus && <AILoader message={aiStatus} />}
+
       {/* --- MODAL IMPORT --- */}
       {showImportModal && (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
                 <div className="flex justify-between mb-4"><h3 className="font-bold flex gap-2 text-purple-700"><Sparkles/> Nhập AI</h3><button onClick={()=>setShowImportModal(false)}><X/></button></div>
                 <textarea className="w-full border p-3 h-32 rounded outline-none focus:ring-2 focus:ring-purple-200" placeholder='Ví dụ: "Lấy 5 chai thuốc sâu 150k"' value={importText} onChange={e=>setImportText(e.target.value)}></textarea>
-                <div className="flex justify-end gap-2 mt-4"><button onClick={()=>setShowImportModal(false)} className="px-4 py-2 bg-gray-100 rounded">Hủy</button><button onClick={handleSmartImport} disabled={isAiLoading||!importText.trim()} className="px-4 py-2 bg-purple-600 text-white rounded">{isAiLoading?'...':'Phân tích'}</button></div>
+                <div className="flex justify-end gap-2 mt-4"><button onClick={()=>setShowImportModal(false)} className="px-4 py-2 bg-gray-100 rounded">Hủy</button><button onClick={handleSmartImport} disabled={!importText.trim()} className="px-4 py-2 bg-purple-600 text-white rounded">Phân tích</button></div>
             </div>
         </div>
       )}
@@ -308,16 +310,12 @@ export default function InvoiceMakerApp() {
                     <h3 className="font-bold flex gap-2 text-blue-600"><MessageCircle/> Soạn Tin Nhắn</h3>
                     <button onClick={()=>setShowMsgModal(false)}><X/></button>
                 </div>
-                {isMsgLoading ? (
-                    <div className="flex items-center justify-center h-32 text-gray-500 gap-2"><RefreshCw className="animate-spin"/> Đang viết...</div>
-                ) : (
-                    <div className="relative">
-                        <textarea readOnly className="w-full border p-3 h-48 rounded outline-none bg-gray-50 text-sm font-medium" value={generatedMsg}></textarea>
-                        <button onClick={copyToClipboard} className="absolute bottom-2 right-2 flex items-center gap-1 bg-white border shadow px-2 py-1 rounded text-xs font-bold text-gray-700 hover:bg-gray-100">
-                            {copied ? <Check size={14} className="text-green-600"/> : <Copy size={14}/>} {copied ? 'Đã chép' : 'Sao chép'}
-                        </button>
-                    </div>
-                )}
+                <div className="relative">
+                    <textarea readOnly className="w-full border p-3 h-48 rounded outline-none bg-gray-50 text-sm font-medium" value={generatedMsg}></textarea>
+                    <button onClick={copyToClipboard} className="absolute bottom-2 right-2 flex items-center gap-1 bg-white border shadow px-2 py-1 rounded text-xs font-bold text-gray-700 hover:bg-gray-100">
+                        {copied ? <Check size={14} className="text-green-600"/> : <Copy size={14}/>} {copied ? 'Đã chép' : 'Sao chép'}
+                    </button>
+                </div>
             </div>
         </div>
       )}
@@ -335,7 +333,7 @@ export default function InvoiceMakerApp() {
             <button onClick={addItem} className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-sm font-bold"><Plus size={16}/> Thêm</button>
             <button onClick={()=>removeItem(items[items.length-1].id)} className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-full text-sm font-bold"><Minus size={16}/> Xóa</button>
             
-            {/* Dropdown chọn khổ giấy (Thay thế 2 nút cũ) */}
+            {/* Dropdown chọn khổ giấy */}
             <div className="relative">
                 <div className="flex items-center gap-1 bg-gray-100 px-3 py-1.5 rounded-full text-sm font-bold text-gray-700 cursor-pointer border border-transparent hover:border-gray-300 group">
                     <span>{PAPER_TYPES[paperType].name}</span>
@@ -428,7 +426,7 @@ export default function InvoiceMakerApp() {
                 <div className="flex gap-2 items-center relative">
                     <span className="font-bold w-24 shrink-0">Ghi chú:</span>
                     <input value={note} onChange={(e)=>setNote(e.target.value)} className={`flex-1 outline-none italic pr-8 ${isEditMode ? 'bg-blue-50 px-1 rounded' : 'bg-transparent border-b border-dotted border-gray-400'}`} placeholder="Ghi chú đơn hàng"/>
-                    <button onClick={handleGenerateNote} data-html2canvas-ignore="true" disabled={isNoteLoading} className="absolute right-0 text-purple-500 print:hidden opacity-50 hover:opacity-100">{isNoteLoading ? <RefreshCw size={14} className="animate-spin"/> : <Sparkles size={14}/>}</button>
+                    <button onClick={handleGenerateNote} data-html2canvas-ignore="true" className="absolute right-0 text-purple-500 print:hidden opacity-50 hover:opacity-100"><Sparkles size={14}/></button>
                 </div>
             </div>
 
@@ -439,7 +437,7 @@ export default function InvoiceMakerApp() {
                         <th className="border border-gray-400 p-2 w-10 text-center">STT</th>
                         <th className="border border-gray-400 p-2 text-left relative">
                             Tên sản phẩm 
-                            <button onClick={handleFixProductNames} data-html2canvas-ignore="true" disabled={isFixingNames} className="absolute right-1 top-1 text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><Wand2 size={14}/></button>
+                            <button onClick={handleFixProductNames} data-html2canvas-ignore="true" className="absolute right-1 top-1 text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><Wand2 size={14}/></button>
                         </th>
                         <th className="border border-gray-400 p-2 w-16 text-center">ĐVT</th>
                         <th className="border border-gray-400 p-2 w-16 text-center">SL</th>
@@ -481,7 +479,7 @@ export default function InvoiceMakerApp() {
                     <div className="text-sm italic flex gap-2 items-center mb-2">
                         <span className="font-bold not-italic">Bằng chữ:</span>
                         <span className="flex-1 border-b border-dotted border-gray-400 pb-1">{amountInWords || '...................................................'}</span>
-                        <button onClick={handleNumberToWords} data-html2canvas-ignore="true" disabled={isWordsLoading || totalPrice === 0} className="text-purple-600 bg-purple-50 border px-2 py-0.5 rounded text-xs font-bold print:hidden flex gap-1 items-center hover:bg-purple-100">{isWordsLoading ? '...' : <><Sparkles size={10}/> AI</>}</button>
+                        <button onClick={handleNumberToWords} data-html2canvas-ignore="true" className="text-purple-600 bg-purple-50 border px-2 py-0.5 rounded text-xs font-bold print:hidden flex gap-1 items-center hover:bg-purple-100"><Sparkles size={10}/> AI</button>
                     </div>
 
                     {/* Thông tin chuyển khoản (Editable) */}
