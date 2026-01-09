@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown, Bot } from 'lucide-react';
+import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown } from 'lucide-react';
 
 // Cấu hình các khổ giấy
 const PAPER_TYPES = {
@@ -10,14 +10,12 @@ const PAPER_TYPES = {
   'legal': { name: 'Legal (Mỹ)', format: 'legal', orientation: 'portrait', width: '216mm', height: '356mm', previewWidth: '196mm' },
 };
 
-// --- COMPONENT LOAD AI XỊN XÒ (MỚI) ---
+// --- COMPONENT LOAD AI XỊN XÒ ---
 const AILoader = ({ message }) => (
   <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center animate-in fade-in duration-200">
     <div className="bg-white/90 p-6 rounded-2xl shadow-2xl border border-purple-100 flex flex-col items-center gap-4 max-w-sm w-full mx-4">
       <div className="relative">
-        {/* Vòng xoay bên ngoài */}
         <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-        {/* Icon AI lấp lánh ở giữa */}
         <div className="absolute inset-0 flex items-center justify-center">
           <Sparkles size={24} className="text-purple-600 animate-pulse" />
         </div>
@@ -56,20 +54,19 @@ export default function InvoiceMakerApp() {
   const [showBankInfo, setShowBankInfo] = useState(true);
   const [bankInfo, setBankInfo] = useState('• Ngân hàng: Agribank\n• Số tài khoản: 5300205625965\n• Chủ tài khoản: NGUYEN THANH TUNG');
 
-  const [paperSize, setPaperSize] = useState('a4'); 
+  // SỬA LỖI: Đồng nhất tên biến state thành 'paperType'
+  const [paperType, setPaperType] = useState('a4'); 
   const [exportMode, setExportMode] = useState('full'); 
   const [isProcessing, setIsProcessing] = useState(false);
   const [amountInWords, setAmountInWords] = useState(''); 
   const [isEditMode, setIsEditMode] = useState(true); 
 
-  // AI States & UI
+  // AI States
   const [showImportModal, setShowImportModal] = useState(false);
   const [showMsgModal, setShowMsgModal] = useState(false);
   const [importText, setImportText] = useState('');
   const [generatedMsg, setGeneratedMsg] = useState('');
-  
-  // Trạng thái AI Loading tập trung (Thay thế các biến loading lẻ tẻ để hiện overlay)
-  const [aiStatus, setAiStatus] = useState(null); // null = ko chạy, string = message đang chạy
+  const [aiStatus, setAiStatus] = useState(null);
   const [copied, setCopied] = useState(false);
   
   const noteRef = useRef(null);
@@ -90,22 +87,31 @@ export default function InvoiceMakerApp() {
       } catch (error) { console.error("Gemini Error:", error); return null; }
   };
 
-  // --- AI HANDLERS (Cập nhật để dùng AILoader) ---
+  // --- AI HANDLERS ---
   const handleSmartImport = async () => {
       if (!importText.trim()) return;
-      setAiStatus("Đang đọc & bóc tách đơn hàng..."); // Bật hiệu ứng load
+      setAiStatus("Đang đọc & bóc tách đơn hàng...");
       
       const prompt = `Trích xuất đơn hàng từ văn bản: "${importText}". Output JSON Array: [{ "name": "...", "unit": "...", "qty": number, "price": number }]`;
       try {
           const res = await callGemini(prompt);
           if (res) {
-              const json = JSON.parse(res.replace(/```json|```/g, '').trim().match(/\[.*\]/s)?.[0] || '[]');
+              const jsonStr = res.replace(/```json|```/g, '').trim().match(/\[.*\]/s)?.[0] || '[]';
+              const json = JSON.parse(jsonStr);
               if (json.length) {
-                   setItems(prev => [...prev, ...json.map(i => ({...i, id: Date.now() + Math.random(), qty: Number(i.qty)||1, price: Number(i.price)||0}))]);
+                   // SỬA LỖI: Sanitize dữ liệu để tránh lỗi render object
+                   const newItems = json.map(i => ({
+                       id: Date.now() + Math.random(),
+                       name: typeof i.name === 'string' ? i.name : 'Sản phẩm mới',
+                       unit: typeof i.unit === 'string' ? i.unit : 'Cái',
+                       qty: Number(i.qty) || 1,
+                       price: Number(i.price) || 0
+                   }));
+                   setItems(prev => [...prev, ...newItems]);
                    setShowImportModal(false); setImportText('');
               }
           }
-      } catch (e) { alert("Lỗi xử lý AI"); } finally { setAiStatus(null); }
+      } catch (e) { console.error(e); alert("Lỗi xử lý AI"); } finally { setAiStatus(null); }
   };
 
   const handleGenerateNote = async () => {
@@ -130,7 +136,8 @@ export default function InvoiceMakerApp() {
       const names = items.map(i => i.name);
       const res = await callGemini(`Chuẩn hóa tên (Viết Hoa Chữ Đầu, Sửa Chính Tả): ${JSON.stringify(names)}. Trả về JSON Array string.`);
       if (res) {
-          const fixed = JSON.parse(res.replace(/```json|```/g, '').trim().match(/\[.*\]/s)?.[0] || '[]');
+          const jsonStr = res.replace(/```json|```/g, '').trim().match(/\[.*\]/s)?.[0] || '[]';
+          const fixed = JSON.parse(jsonStr);
           if (fixed.length === items.length) setItems(items.map((it, idx) => ({ ...it, name: fixed[idx] || it.name })));
       }
       setAiStatus(null);
@@ -138,32 +145,17 @@ export default function InvoiceMakerApp() {
 
   const handleDraftMessage = async () => {
       setAiStatus("Đang soạn tin nhắn Zalo...");
-      
       const total = items.reduce((s, i) => s + (i.qty * i.price), 0);
       const totalFormatted = formatCurrency(total);
-      
       const prompt = `
-        Hãy đóng vai chủ cửa hàng "${shopName}", soạn một tin nhắn Zalo ngắn gọn, lịch sự gửi cho khách hàng "${customerName}".
-        Thông tin cần có:
-        - Thông báo đã lên đơn hàng mã ${invoiceCode}.
-        - Tổng số tiền cần thanh toán: ${totalFormatted}.
-        - Thông tin chuyển khoản: "${bankInfo.replace(/\n/g, ', ')}".
-        Yêu cầu:
-        - Giọng điệu thân thiện, chuyên nghiệp.
-        - Trình bày rõ ràng, dễ đọc trên điện thoại.
-        - Kết thúc bằng lời cảm ơn.
-        - Chỉ trả về nội dung tin nhắn.
+        Hãy đóng vai chủ cửa hàng "${shopName}", soạn một tin nhắn Zalo ngắn gọn gửi cho khách hàng "${customerName}".
+        Thông tin: Đã lên đơn ${invoiceCode}. Tổng tiền: ${totalFormatted}. CK: "${bankInfo.replace(/\n/g, ', ')}".
+        Yêu cầu: Thân thiện, chuyên nghiệp, chỉ trả về nội dung tin nhắn.
       `;
-
       const res = await callGemini(prompt);
-      setAiStatus(null); // Tắt load xong mới hiện modal
-      
-      if (res) {
-          setGeneratedMsg(res.trim());
-          setShowMsgModal(true);
-      } else {
-          alert("AI đang bận, vui lòng thử lại!");
-      }
+      setAiStatus(null);
+      if (res) { setGeneratedMsg(res.trim()); setShowMsgModal(true); } 
+      else { alert("AI đang bận, vui lòng thử lại!"); }
   };
 
   const copyToClipboard = () => {
@@ -193,7 +185,7 @@ export default function InvoiceMakerApp() {
 
       setTimeout(() => {
           const element = noteRef.current;
-          const config = PAPER_TYPES[paperType];
+          const config = PAPER_TYPES[paperType]; // Đã sửa: dùng paperType
           const filename = `HoaDon_${invoiceCode}.pdf`;
           
           const opt = {
@@ -205,33 +197,18 @@ export default function InvoiceMakerApp() {
 
           const processBlob = (blob) => {
               const file = new File([blob], filename, { type: 'application/pdf' });
-              
               if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                  navigator.share({
-                      files: [file],
-                      title: 'Gửi hóa đơn',
-                      text: `Gửi bạn hóa đơn ${invoiceCode}. Tổng tiền: ${formatCurrency(totalPrice)}`
-                  })
+                  navigator.share({ files: [file], title: 'Gửi hóa đơn', text: `Gửi bạn hóa đơn ${invoiceCode}. Tổng tiền: ${formatCurrency(totalPrice)}` })
                   .then(() => alert("Đã chia sẻ thành công!"))
-                  .catch((e) => console.log("Hủy chia sẻ", e))
-                  .finally(() => {
-                      setIsProcessing(false); 
-                      setIsEditMode(true);
-                  });
+                  .catch(() => {})
+                  .finally(() => { setIsProcessing(false); setIsEditMode(true); });
               } else {
                   const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = filename;
-                  a.click();
-                  URL.revokeObjectURL(url);
-
+                  const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
                   const msg = `Gửi bạn hóa đơn ${invoiceCode}.\nTổng tiền: ${formatCurrency(totalPrice)}\n\n${bankInfo}`;
                   navigator.clipboard.writeText(msg);
-
-                  alert("Đã tải file PDF về máy và COPY sẵn tin nhắn.\n\nBạn hãy mở Zalo PC -> Dán tin nhắn (Ctrl+V) và Kéo file PDF vào để gửi nhé!");
-                  setIsProcessing(false);
-                  setIsEditMode(true);
+                  alert("Đã tải file PDF và COPY tin nhắn.\n\nBạn hãy mở Zalo PC -> Dán tin nhắn (Ctrl+V) và Kéo file PDF vào để gửi!");
+                  setIsProcessing(false); setIsEditMode(true);
               }
           };
 
@@ -240,9 +217,7 @@ export default function InvoiceMakerApp() {
           } else {
               const script = document.createElement('script');
               script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-              script.onload = () => {
-                  window.html2pdf().set(opt).from(element).output('blob').then(processBlob);
-              };
+              script.onload = () => { window.html2pdf().set(opt).from(element).output('blob').then(processBlob); };
               document.body.appendChild(script);
           }
       }, 500);
@@ -257,7 +232,7 @@ export default function InvoiceMakerApp() {
       
       setTimeout(() => {
           const element = noteRef.current;
-          const config = PAPER_TYPES[paperType];
+          const config = PAPER_TYPES[paperType]; // Đã sửa: dùng paperType
           const opt = {
               margin: 5, filename: `${mode==='full'?'HOADON':'PHIEU'}_${invoiceCode}.pdf`,
               image: { type: 'jpeg', quality: 1 },
@@ -267,20 +242,14 @@ export default function InvoiceMakerApp() {
 
           const done = () => { setIsProcessing(false); setExportMode('full'); setIsEditMode(true); }; 
 
-          if (action === 'print') { 
-              window.print(); 
-              done(); 
-          } else {
+          if (action === 'print') { window.print(); done(); } 
+          else {
               if (!window.html2pdf) {
                   const script = document.createElement('script');
                   script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-                  script.onload = () => {
-                      window.html2pdf().set(opt).from(element).save().then(done).catch(done);
-                  };
+                  script.onload = () => { window.html2pdf().set(opt).from(element).save().then(done).catch(done); };
                   document.body.appendChild(script);
-              } else {
-                  window.html2pdf().set(opt).from(element).save().then(done).catch(done);
-              }
+              } else { window.html2pdf().set(opt).from(element).save().then(done).catch(done); }
           }
       }, 500);
   };
@@ -288,7 +257,7 @@ export default function InvoiceMakerApp() {
   return (
     <div className="flex flex-col items-center min-h-screen bg-gray-100 p-4 font-sans print:bg-white print:p-0">
       
-      {/* --- AI LOADING OVERLAY (HIỆU ỨNG MỚI) --- */}
+      {/* --- AI LOADING OVERLAY --- */}
       {aiStatus && <AILoader message={aiStatus} />}
 
       {/* --- MODAL IMPORT --- */}
@@ -306,10 +275,7 @@ export default function InvoiceMakerApp() {
       {showMsgModal && (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-                <div className="flex justify-between mb-4">
-                    <h3 className="font-bold flex gap-2 text-blue-600"><MessageCircle/> Soạn Tin Nhắn</h3>
-                    <button onClick={()=>setShowMsgModal(false)}><X/></button>
-                </div>
+                <div className="flex justify-between mb-4"><h3 className="font-bold flex gap-2 text-blue-600"><MessageCircle/> Soạn Tin Nhắn</h3><button onClick={()=>setShowMsgModal(false)}><X/></button></div>
                 <div className="relative">
                     <textarea readOnly className="w-full border p-3 h-48 rounded outline-none bg-gray-50 text-sm font-medium" value={generatedMsg}></textarea>
                     <button onClick={copyToClipboard} className="absolute bottom-2 right-2 flex items-center gap-1 bg-white border shadow px-2 py-1 rounded text-xs font-bold text-gray-700 hover:bg-gray-100">
@@ -333,19 +299,12 @@ export default function InvoiceMakerApp() {
             <button onClick={addItem} className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-sm font-bold"><Plus size={16}/> Thêm</button>
             <button onClick={()=>removeItem(items[items.length-1].id)} className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-full text-sm font-bold"><Minus size={16}/> Xóa</button>
             
-            {/* Dropdown chọn khổ giấy */}
             <div className="relative">
                 <div className="flex items-center gap-1 bg-gray-100 px-3 py-1.5 rounded-full text-sm font-bold text-gray-700 cursor-pointer border border-transparent hover:border-gray-300 group">
-                    <span>{PAPER_TYPES[paperType].name}</span>
+                    <span>{PAPER_TYPES[paperType]?.name}</span>
                     <ChevronDown size={14}/>
-                    <select 
-                        value={paperType}
-                        onChange={(e) => setPaperType(e.target.value)}
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                    >
-                        {Object.keys(PAPER_TYPES).map(key => (
-                            <option key={key} value={key}>{PAPER_TYPES[key].name}</option>
-                        ))}
+                    <select value={paperType} onChange={(e) => setPaperType(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer">
+                        {Object.keys(PAPER_TYPES).map(key => (<option key={key} value={key}>{PAPER_TYPES[key].name}</option>))}
                     </select>
                 </div>
             </div>
@@ -377,8 +336,8 @@ export default function InvoiceMakerApp() {
             ref={noteRef} 
             className={`bg-white p-8 shadow-2xl print:shadow-none transition-all duration-300 relative ${isEditMode ? 'ring-2 ring-orange-100' : ''}`} 
             style={{ 
-                width: PAPER_TYPES[paperType].previewWidth, 
-                minHeight: (PAPER_TYPES[paperType].orientation === 'landscape' ? '148mm' : '297mm')
+                width: PAPER_TYPES[paperType]?.previewWidth, 
+                minHeight: (PAPER_TYPES[paperType]?.orientation === 'landscape' ? '148mm' : '297mm')
             }}
         >
             
