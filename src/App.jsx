@@ -51,6 +51,7 @@ export default function InvoiceMakerApp() {
   const [date, setDate] = useState(new Date().toLocaleDateString('vi-VN'));
   const [invoiceCode, setInvoiceCode] = useState('HD001');
   
+  // Thông tin thanh toán (Bank Info)
   const [showBankInfo, setShowBankInfo] = useState(true);
   const [bankInfo, setBankInfo] = useState('• Ngân hàng: Agribank\n• Số tài khoản: 5300205625965\n• Chủ tài khoản: NGUYEN THANH TUNG');
 
@@ -106,7 +107,7 @@ export default function InvoiceMakerApp() {
   // --- AI HANDLERS ---
   const handleSmartImport = async () => {
       if (!importText.trim()) return;
-      setAiStatus("Đang đọc tin nhắn & tách đơn...");
+      setAiStatus("Đang đọc & bóc tách đơn hàng...");
       
       const prompt = `
         Bạn là một trợ lý bán hàng thông minh. Nhiệm vụ của bạn là bóc tách thông tin từ tin nhắn đặt hàng.
@@ -160,8 +161,6 @@ export default function InvoiceMakerApp() {
                            price: Number(i.price) || 0
                        }));
                        
-                       // Hỏi người dùng muốn ghi đè hay thêm vào
-                       // Ở đây mình chọn cách thêm vào cho an toàn, nếu muốn reset thì họ có nút Xóa
                        setItems(prev => [...prev, ...newItems]);
                        setShowImportModal(false); 
                        setImportText('');
@@ -178,16 +177,39 @@ export default function InvoiceMakerApp() {
   const handleGenerateNote = async () => {
       setAiStatus("Đang suy nghĩ lời chúc hay...");
       const itemsStr = items.map(i => i.name).join(", ");
-      const res = await callGemini(`Viết lời nhắn ngắn (dưới 15 từ) cho khách "${customerName}" mua: ${itemsStr}. Mục đích: Cảm ơn/Dặn dò.`);
-      if (res) setNote(res.trim());
-      setAiStatus(null);
+      
+      // PROMPT MỚI: NGHIÊM NGẶT HƠN
+      const prompt = `
+        Hãy viết DUY NHẤT 1 câu ghi chú ngắn gọn (dưới 15 từ) để in lên hóa đơn gửi cho khách hàng tên là "${customerName}".
+        Khách vừa mua các món: ${itemsStr}.
+        
+        Yêu cầu BẮT BUỘC:
+        1. Chỉ trả về nội dung câu nói.
+        2. KHÔNG dùng dấu ngoặc kép bao quanh.
+        3. KHÔNG đưa ra nhiều lựa chọn (Option 1, Option 2...).
+        4. KHÔNG hiển thị số lượng từ.
+        
+        Ví dụ output chuẩn: Cảm ơn Anh Tùng đã ủng hộ, chúc anh mùa màng bội thu!
+      `;
+
+      try {
+          const res = await callGemini(prompt);
+          if (res) {
+              // Làm sạch thêm 1 lần nữa cho chắc chắn
+              let cleanNote = res.trim();
+              if (cleanNote.startsWith('"') && cleanNote.endsWith('"')) {
+                  cleanNote = cleanNote.slice(1, -1);
+              }
+              setNote(cleanNote);
+          }
+      } catch (e) { console.error(e); } finally { setAiStatus(null); }
   };
 
   const handleNumberToWords = async () => {
       const total = items.reduce((s, i) => s + (i.qty * i.price), 0);
       if (total === 0) return;
       setAiStatus("Đang đọc số tiền thành chữ...");
-      const res = await callGemini(`Đọc số tiền ${total} thành chữ tiếng Việt (viết hoa đầu, kết thúc 'đồng').`);
+      const res = await callGemini(`Đọc số tiền ${total} thành chữ tiếng Việt (viết hoa đầu, kết thúc 'đồng'). Chỉ trả về text, không giải thích.`);
       if (res) setAmountInWords(res.trim());
       setAiStatus(null);
   };
@@ -372,7 +394,6 @@ export default function InvoiceMakerApp() {
             <button onClick={addItem} className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-sm font-bold"><Plus size={16}/> Thêm</button>
             <button onClick={()=>removeItem(items[items.length-1].id)} className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-full text-sm font-bold"><Minus size={16}/> Xóa</button>
             
-            {/* Dropdown chọn khổ giấy */}
             <div className="relative">
                 <div className="flex items-center gap-1 bg-gray-100 px-3 py-1.5 rounded-full text-sm font-bold text-gray-700 cursor-pointer border border-transparent hover:border-gray-300 group">
                     <span>{PAPER_TYPES[paperType]?.name}</span>
