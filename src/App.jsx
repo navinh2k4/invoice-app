@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown } from 'lucide-react';
+import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown, Zap } from 'lucide-react';
 
 // Cấu hình các khổ giấy phổ biến
 const PAPER_TYPES = {
@@ -9,6 +9,9 @@ const PAPER_TYPES = {
   'letter': { name: 'Letter (Mỹ)', format: 'letter', orientation: 'portrait', width: '216mm', height: '279mm', previewWidth: '196mm' },
   'legal': { name: 'Legal (Mỹ)', format: 'legal', orientation: 'portrait', width: '216mm', height: '356mm', previewWidth: '196mm' },
 };
+
+// Giới hạn Free Tier của Gemini Flash
+const DAILY_LIMIT = 1500;
 
 // --- COMPONENT LOAD AI XỊN XÒ ---
 const AILoader = ({ message }) => (
@@ -61,18 +64,40 @@ export default function InvoiceMakerApp() {
   const [amountInWords, setAmountInWords] = useState(''); 
   const [isEditMode, setIsEditMode] = useState(true); 
 
-  // AI States
+  // AI States & Usage Tracking
   const [showImportModal, setShowImportModal] = useState(false);
   const [showMsgModal, setShowMsgModal] = useState(false);
   const [importText, setImportText] = useState('');
   const [generatedMsg, setGeneratedMsg] = useState('');
   const [aiStatus, setAiStatus] = useState(null); 
   const [copied, setCopied] = useState(false);
+  const [usageCount, setUsageCount] = useState(0); // Bộ đếm usage
   
   const noteRef = useRef(null);
 
-  // --- HELPER FORMAT SỐ (MỚI) ---
-  // Format số thành chuỗi có dấu chấm: 100000 -> "100.000"
+  // --- INIT USAGE COUNTER ---
+  useEffect(() => {
+      // Logic: Kiểm tra ngày, nếu qua ngày mới thì reset về 0
+      const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+      const storedDate = localStorage.getItem('gemini_usage_date');
+      const storedCount = parseInt(localStorage.getItem('gemini_usage_count') || '0');
+
+      if (storedDate !== today) {
+          localStorage.setItem('gemini_usage_date', today);
+          localStorage.setItem('gemini_usage_count', '0');
+          setUsageCount(0);
+      } else {
+          setUsageCount(storedCount);
+      }
+  }, []);
+
+  const incrementUsage = () => {
+      const newCount = usageCount + 1;
+      setUsageCount(newCount);
+      localStorage.setItem('gemini_usage_count', newCount.toString());
+  };
+
+  // --- HELPER FORMAT SỐ ---
   const formatNumberWithDots = (num) => {
     if (!num) return '';
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -80,6 +105,12 @@ export default function InvoiceMakerApp() {
 
   // --- GEMINI API HELPERS ---
   const callGemini = async (prompt) => {
+      // 1. Kiểm tra giới hạn Usage
+      if (usageCount >= DAILY_LIMIT) {
+          alert(`⚠️ ĐÃ ĐẠT GIỚI HẠN MIỄN PHÍ TRONG NGÀY!\n\nBạn đã sử dụng ${usageCount}/${DAILY_LIMIT} lượt hôm nay.\nĐây là giới hạn của gói Gemini Free, không phải lỗi ứng dụng.\nVui lòng quay lại vào ngày mai.`);
+          return null;
+      }
+
       let apiKey = "";
       try {
           if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -100,8 +131,18 @@ export default function InvoiceMakerApp() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         });
+        
+        // 2. Xử lý lỗi Rate Limit từ phía Google (429)
+        if (response.status === 429) {
+            throw new Error("Hệ thống đang bận (Quá nhiều yêu cầu trong 1 phút). Vui lòng đợi 30 giây rồi thử lại.");
+        }
+
         const data = await response.json();
         if (!data.candidates?.length) throw new Error("No AI response");
+        
+        // 3. Tăng bộ đếm khi thành công
+        incrementUsage();
+        
         return data.candidates[0].content.parts[0].text;
       } catch (error) { 
           console.error("Gemini Error:", error); 
@@ -357,6 +398,12 @@ export default function InvoiceMakerApp() {
       {/* --- TOOLBAR --- */}
       <div className="w-full max-w-5xl bg-white p-3 rounded-lg shadow-md mb-6 print:hidden border sticky top-0 z-50 flex flex-wrap justify-between items-center gap-2">
         <div className="flex flex-wrap gap-2 items-center">
+            {/* Hiển thị Usage AI */}
+            <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold border ${usageCount >= DAILY_LIMIT ? 'bg-red-100 text-red-600 border-red-200' : 'bg-purple-50 text-purple-700 border-purple-100'}`} title="Số lượt dùng AI hôm nay">
+                <Zap size={14} fill={usageCount >= DAILY_LIMIT ? "currentColor" : "none"}/>
+                <span>{usageCount}/{DAILY_LIMIT}</span>
+            </div>
+
             <button onClick={() => setIsEditMode(!isEditMode)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-bold border transition-colors ${isEditMode ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-600'}`}>
                 {isEditMode ? <><Edit3 size={16}/> Sửa</> : <><Eye size={16}/> Xem</>}
             </button>
