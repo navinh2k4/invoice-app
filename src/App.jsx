@@ -1,5 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2 } from 'lucide-react';
+import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown } from 'lucide-react';
+
+// Cấu hình các khổ giấy phổ biến
+const PAPER_TYPES = {
+  'a4': { name: 'A4 (Dọc)', format: 'a4', orientation: 'portrait', width: '210mm', height: '297mm', previewWidth: '190mm' },
+  'a5_land': { name: 'A5 (Ngang)', format: 'a5', orientation: 'landscape', width: '210mm', height: '148mm', previewWidth: '190mm' },
+  'a5_port': { name: 'A5 (Dọc)', format: 'a5', orientation: 'portrait', width: '148mm', height: '210mm', previewWidth: '128mm' },
+  'letter': { name: 'Letter (Mỹ)', format: 'letter', orientation: 'portrait', width: '216mm', height: '279mm', previewWidth: '196mm' },
+  'legal': { name: 'Legal (Mỹ)', format: 'legal', orientation: 'portrait', width: '216mm', height: '356mm', previewWidth: '196mm' },
+};
 
 export default function InvoiceMakerApp() {
   // --- STATE DỮ LIỆU ---
@@ -25,7 +34,8 @@ export default function InvoiceMakerApp() {
   const [showBankInfo, setShowBankInfo] = useState(true);
   const [bankInfo, setBankInfo] = useState('• Ngân hàng: Agribank\n• Số tài khoản: 5300205625965\n• Chủ tài khoản: NGUYEN THANH TUNG');
 
-  const [paperSize, setPaperSize] = useState('a4'); 
+  // Cấu hình giấy (Mặc định A4)
+  const [paperType, setPaperType] = useState('a4'); 
   const [exportMode, setExportMode] = useState('full'); 
   const [isProcessing, setIsProcessing] = useState(false);
   const [amountInWords, setAmountInWords] = useState(''); 
@@ -47,6 +57,7 @@ export default function InvoiceMakerApp() {
 
   // --- GEMINI API HELPERS ---
   const callGemini = async (prompt) => {
+      // Khi deploy lên Vercel, hãy dùng: import.meta.env.VITE_GEMINI_API_KEY || "";
       const apiKey = ""; 
       try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
@@ -151,29 +162,27 @@ export default function InvoiceMakerApp() {
   const removeItem = (id) => { setItems(prev => prev.length===1 ? [{id: Date.now(), name:'', unit:'', qty:1, price:0}] : prev.filter(i=>i.id!==id)); setAmountInWords(''); };
   const resetData = () => { if(confirm("Xóa dữ liệu?")) { setItems([{ id: Date.now(), name: '', unit: '', qty: 1, price: 0 }]); setAmountInWords(''); setCustomerName(''); setCustomerPhone(''); setCustomerAddress(''); } };
 
-  // --- SMART SHARE ZALO (NEW) ---
+  // --- SMART SHARE ZALO ---
   const handleShareZalo = () => {
       if (isProcessing) return;
       setIsProcessing(true);
-      setIsEditMode(false); // Tắt edit mode để chụp ảnh đẹp
+      setIsEditMode(false); 
 
       setTimeout(() => {
           const element = noteRef.current;
-          const isA5 = paperSize === 'a5';
+          const config = PAPER_TYPES[paperType];
           const filename = `HoaDon_${invoiceCode}.pdf`;
           
           const opt = {
               margin: 5, filename: filename,
               image: { type: 'jpeg', quality: 1 },
               html2canvas: { scale: 2, useCORS: true },
-              jsPDF: { unit: 'mm', format: isA5 ? 'a5' : 'a4', orientation: isA5 ? 'landscape' : 'portrait' }
+              jsPDF: { unit: 'mm', format: config.format, orientation: config.orientation }
           };
 
-          // Hàm xử lý sau khi có PDF blob
           const processBlob = (blob) => {
               const file = new File([blob], filename, { type: 'application/pdf' });
               
-              // 1. Nếu trình duyệt hỗ trợ chia sẻ File (Mobile)
               if (navigator.canShare && navigator.canShare({ files: [file] })) {
                   navigator.share({
                       files: [file],
@@ -186,10 +195,7 @@ export default function InvoiceMakerApp() {
                       setIsProcessing(false); 
                       setIsEditMode(true);
                   });
-              } 
-              // 2. Nếu là Desktop (Thường không share file trực tiếp được) -> Tải về + Copy tin nhắn
-              else {
-                  // Tải file về
+              } else {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
@@ -197,7 +203,6 @@ export default function InvoiceMakerApp() {
                   a.click();
                   URL.revokeObjectURL(url);
 
-                  // Copy nội dung tin nhắn sẵn
                   const msg = `Gửi bạn hóa đơn ${invoiceCode}.\nTổng tiền: ${formatCurrency(totalPrice)}\n\n${bankInfo}`;
                   navigator.clipboard.writeText(msg);
 
@@ -208,10 +213,8 @@ export default function InvoiceMakerApp() {
           };
 
           if (window.html2pdf) {
-              // Sử dụng .output('blob') để lấy dữ liệu file thay vì .save()
               window.html2pdf().set(opt).from(element).output('blob').then(processBlob);
           } else {
-              // Load thư viện nếu chưa có
               const script = document.createElement('script');
               script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
               script.onload = () => {
@@ -231,12 +234,12 @@ export default function InvoiceMakerApp() {
       
       setTimeout(() => {
           const element = noteRef.current;
-          const isA5 = paperSize === 'a5';
+          const config = PAPER_TYPES[paperType];
           const opt = {
               margin: 5, filename: `${mode==='full'?'HOADON':'PHIEU'}_${invoiceCode}.pdf`,
               image: { type: 'jpeg', quality: 1 },
               html2canvas: { scale: 2, useCORS: true },
-              jsPDF: { unit: 'mm', format: isA5 ? 'a5' : 'a4', orientation: isA5 ? 'landscape' : 'portrait' }
+              jsPDF: { unit: 'mm', format: config.format, orientation: config.orientation }
           };
 
           const done = () => { setIsProcessing(false); setExportMode('full'); setIsEditMode(true); }; 
@@ -307,15 +310,28 @@ export default function InvoiceMakerApp() {
             <button onClick={handleDraftMessage} className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-sm font-bold"><MessageCircle size={16}/> Soạn Tin</button>
             <button onClick={addItem} className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-sm font-bold"><Plus size={16}/> Thêm</button>
             <button onClick={()=>removeItem(items[items.length-1].id)} className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-full text-sm font-bold"><Minus size={16}/> Xóa</button>
-             <div className="flex bg-gray-100 rounded p-1">
-                <button onClick={() => setPaperSize('a5')} className={`px-2 py-1 text-xs rounded ${paperSize === 'a5' ? 'bg-white shadow font-bold text-blue-600' : 'text-gray-500'}`}>A5</button>
-                <button onClick={() => setPaperSize('a4')} className={`px-2 py-1 text-xs rounded ${paperSize === 'a4' ? 'bg-white shadow font-bold text-blue-600' : 'text-gray-500'}`}>A4</button>
+            
+            {/* Dropdown chọn khổ giấy (Thay thế 2 nút cũ) */}
+            <div className="relative">
+                <div className="flex items-center gap-1 bg-gray-100 px-3 py-1.5 rounded-full text-sm font-bold text-gray-700 cursor-pointer border border-transparent hover:border-gray-300 group">
+                    <span>{PAPER_TYPES[paperType].name}</span>
+                    <ChevronDown size={14}/>
+                    <select 
+                        value={paperType}
+                        onChange={(e) => setPaperType(e.target.value)}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                    >
+                        {Object.keys(PAPER_TYPES).map(key => (
+                            <option key={key} value={key}>{PAPER_TYPES[key].name}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
+
              <button onClick={() => setShowBankInfo(!showBankInfo)} className={`p-2 rounded ${showBankInfo ? 'text-blue-600 bg-blue-50' : 'text-gray-400'}`} title="Bật/Tắt Thông tin Ngân hàng"><Settings size={18}/></button>
              <button onClick={resetData} className="text-gray-500 p-2"><RefreshCw size={18}/></button>
         </div>
         <div className="flex gap-2">
-             {/* Nút Gửi Zalo/Share Mới */}
              <button onClick={handleShareZalo} disabled={isProcessing} className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded text-sm font-medium flex gap-1 items-center shadow-sm">
                 <Share2 size={16}/> <span className="hidden sm:inline">Gửi Zalo</span>
             </button>
@@ -335,7 +351,14 @@ export default function InvoiceMakerApp() {
 
       {/* --- INVOICE PAPER --- */}
       <div className="w-full overflow-auto flex justify-center pb-20">
-        <div ref={noteRef} className={`bg-white p-8 shadow-2xl print:shadow-none transition-all duration-300 relative ${isEditMode ? 'ring-2 ring-orange-100' : ''}`} style={{ width: '190mm', minHeight: paperSize === 'a5' ? '148mm' : '297mm' }}>
+        <div 
+            ref={noteRef} 
+            className={`bg-white p-8 shadow-2xl print:shadow-none transition-all duration-300 relative ${isEditMode ? 'ring-2 ring-orange-100' : ''}`} 
+            style={{ 
+                width: PAPER_TYPES[paperType].previewWidth, 
+                minHeight: (PAPER_TYPES[paperType].orientation === 'landscape' ? '148mm' : '297mm')
+            }}
+        >
             
             {/* HEADER (EDITABLE) */}
             <div className="flex justify-between border-b-2 border-gray-800 pb-4 mb-4">
