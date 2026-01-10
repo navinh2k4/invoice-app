@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown, Zap, Image as ImageIcon, Lightbulb, Globe, Tag, MapPin, Percent, Mail, Megaphone, BookOpen, ShieldAlert, Package, PhoneCall, ShieldCheck, CalendarClock, HeartHandshake, User, FileText, LayoutTemplate, FileSignature, BellRing, CloudSun, Box, Feather, Video, LifeBuoy, Store, CalendarDays, TicketPercent } from 'lucide-react';
+import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown, Zap, Image as ImageIcon, Lightbulb, Globe, Tag, MapPin, Percent, Mail, Megaphone, BookOpen, ShieldAlert, Package, PhoneCall, ShieldCheck, CalendarClock, HeartHandshake, User, FileText, LayoutTemplate, FileSignature, BellRing, CloudSun, Box, Feather, Video, LifeBuoy, Store, CalendarDays, Ticket } from 'lucide-react';
 
 // Cấu hình các khổ giấy phổ biến
 const PAPER_TYPES = {
@@ -1054,7 +1054,7 @@ export default function InvoiceMakerApp() {
                 <button onClick={handleReorderPrediction} className="p-1.5 text-green-700 hover:bg-green-100 rounded-full transition-all" title="Dự báo tái tiêu dùng"><CalendarClock size={16}/></button>
                 <button onClick={handleSeasonalTrend} className="p-1.5 text-orange-600 hover:bg-orange-100 rounded-full transition-all" title="Dự báo mùa vụ (Mới)"><CloudSun size={16}/></button>
                 <button onClick={handleCareSchedule} className="p-1.5 text-teal-600 hover:bg-teal-100 rounded-full transition-all" title="Lịch chăm sóc khách hàng (Mới)"><CalendarDays size={16}/></button>
-                <button onClick={handleCouponGenerator} className="p-1.5 text-fuchsia-600 hover:bg-fuchsia-100 rounded-full transition-all" title="Tạo mã giảm giá độc đáo (Mới)"><TicketPercent size={16}/></button>
+                <button onClick={handleCouponGenerator} className="p-1.5 text-fuchsia-600 hover:bg-fuchsia-100 rounded-full transition-all" title="Tạo mã giảm giá độc đáo (Mới)"><Ticket size={16}/></button>
             </div>
             
             {/* Nhóm nút Giao tiếp & Hướng dẫn & In Tem */}
