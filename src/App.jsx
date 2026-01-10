@@ -3,7 +3,7 @@ import {
   Printer, Download, RefreshCw, Sparkles, X, Edit3, Eye, MessageCircle, 
   Image as ImageIcon, Lightbulb, ShieldAlert, HeartHandshake, User, 
   Megaphone, Store, CalendarClock, ScanBarcode, Smartphone, Maximize, 
-  Trash2, Plus
+  Trash2, Plus, Package, FileText, Share2
 } from 'lucide-react';
 
 // --- CONFIGURATION: ENVIRONMENT VARIABLES ---
@@ -91,8 +91,10 @@ export default function App() {
   // Settings
   const [paperType, setPaperType] = useState('a4');
   const [isEditMode, setIsEditMode] = useState(true);
+  const [exportMode, setExportMode] = useState('invoice'); // 'invoice' | 'delivery'
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isAutoFit, setIsAutoFit] = useState(true); // Default auto-fit on mobile
+  const [isExporting, setIsExporting] = useState(false); // Trạng thái đang xuất file
 
   // AI & Logic State
   const [aiStatus, setAiStatus] = useState(null);
@@ -203,30 +205,97 @@ export default function App() {
     setScanInput('');
   };
 
-  const handleExport = (type) => {
+  // --- EXPORT & SHARE FUNCTION ---
+  const handleExport = (action, mode = 'invoice') => {
+    // action: 'print' | 'pdf' | 'share'
+    if (isExporting) return;
+    setIsExporting(true);
+    
     setIsEditMode(false);
-    // Force scale to 1 for printing/pdf to ensure high quality
+    setExportMode(mode); 
+    
+    // Force scale to 1 for high quality
     const prevScale = zoomLevel;
     const prevAutoFit = isAutoFit;
     setZoomLevel(1);
     setIsAutoFit(false);
 
+    const fileNamePrefix = mode === 'delivery' ? 'PXK' : 'HD';
+    const fileName = `${fileNamePrefix}_${invoiceCode}_${paperType.toUpperCase()}.pdf`;
+
+    // Wait for render update
     setTimeout(() => {
-        if (type === 'print') window.print();
-        else {
-             const element = noteRef.current;
-             const opt = { margin: 5, filename: `HD_${invoiceCode}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: PAPER_TYPES[paperType].format, orientation: 'portrait' } };
-             if (window.html2pdf) window.html2pdf().set(opt).from(element).save();
-             else {
-                 const script = document.createElement('script');
-                 script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-                 script.onload = () => window.html2pdf().set(opt).from(element).save();
-                 document.body.appendChild(script);
-             }
+        const element = noteRef.current;
+        const opt = { 
+            margin: 0, 
+            filename: fileName, 
+            image: { type: 'jpeg', quality: 0.98 }, 
+            html2canvas: { scale: 2, scrollX: 0, scrollY: 0, useCORS: true }, 
+            jsPDF: { unit: 'mm', format: PAPER_TYPES[paperType].format, orientation: 'portrait' } 
+        };
+
+        const processHTML2PDF = () => {
+            const worker = window.html2pdf().set(opt).from(element);
+            
+            if (action === 'print') {
+                worker.save().then(() => {
+                    window.print();
+                    finishExport();
+                });
+            } else if (action === 'pdf') {
+                worker.save().then(finishExport);
+            } else if (action === 'share') {
+                // Generate Blob for sharing
+                worker.output('blob').then(async (blob) => {
+                    const file = new File([blob], fileName, { type: 'application/pdf' });
+                    
+                    // Create share message
+                    const msg = `Gửi bạn ${mode === 'invoice' ? 'hóa đơn' : 'phiếu xuất'} ${invoiceCode}.\n` + 
+                                (mode === 'invoice' ? `Tổng tiền: ${formatMoney(totalPrice)}đ.\n\n${bankInfo}` : `Vui lòng kiểm tra số lượng hàng hóa.`);
+
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        try {
+                            await navigator.share({
+                                files: [file],
+                                title: 'Gửi Hóa Đơn',
+                                text: msg
+                            });
+                        } catch (err) {
+                            console.log('Share canceled or failed', err);
+                        }
+                    } else {
+                        // Fallback if sharing not supported
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName;
+                        a.click();
+                        navigator.clipboard.writeText(msg);
+                        alert('Thiết bị không hỗ trợ chia sẻ trực tiếp.\nĐã tải file PDF và COPY sẵn nội dung tin nhắn.\nHãy mở Zalo/Messenger và dán nhé!');
+                    }
+                    finishExport();
+                });
+            }
+        };
+
+        if (window.html2pdf) {
+            processHTML2PDF();
+        } else {
+            const script = document.createElement('script');
+            script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+            script.onload = processHTML2PDF;
+            document.body.appendChild(script);
         }
-        // Restore view after a short delay
-        setTimeout(() => { setIsEditMode(true); setIsAutoFit(prevAutoFit); setZoomLevel(prevScale); }, 1000);
-    }, 500);
+
+    }, 800); // Increased delay slightly to ensure rendering
+
+    const finishExport = () => {
+        setIsExporting(false);
+        setIsEditMode(true); 
+        setIsAutoFit(prevAutoFit); 
+        setZoomLevel(prevScale); 
+        setExportMode('invoice');
+    };
   };
 
   // AI Actions (Simplified for brevity)
@@ -241,6 +310,18 @@ export default function App() {
       return res; // Returned result for chaining
   };
 
+  const handleGenerateSlogan = async () => {
+      setAiStatus("Đang sáng tạo slogan...");
+      const prompt = `Sáng tạo slogan ngắn gọn (dưới 12 từ), vần điệu cho shop "${shopName}". Ngành hàng ${STORE_MODES[storeMode].label}.`;
+      const res = await callGemini(prompt);
+      if (res) {
+          let clean = res.trim();
+          if (clean.startsWith('"')) clean = clean.slice(1, -1);
+          setShopSlogan(clean);
+      }
+      setAiStatus(null);
+  };
+
   // Calculations
   const totalQty = items.reduce((s, i) => s + Number(i.qty), 0);
   const totalPrice = items.reduce((s, i) => s + (Number(i.qty) * Number(i.price)), 0);
@@ -249,6 +330,12 @@ export default function App() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 font-sans print:bg-white text-gray-800">
       {aiStatus && <AILoader message={aiStatus} />}
+      {isExporting && (
+          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center flex-col text-white">
+              <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
+              <p className="font-bold">Đang tạo file PDF...</p>
+          </div>
+      )}
 
       {/* --- MOBILE-OPTIMIZED TOOLBAR --- */}
       <div className="sticky top-0 z-50 bg-white shadow-md border-b print:hidden">
@@ -268,16 +355,26 @@ export default function App() {
              </div>
          </div>
 
-         {/* Middle Row: View & Export Controls */}
+         {/* Middle Row: View, Paper & Export Controls */}
          <div className="flex items-center justify-between px-3 pb-2 border-b border-gray-100 gap-2 overflow-x-auto no-scrollbar">
+             {/* Zoom Controls */}
              <div className="flex items-center bg-gray-100 rounded-lg p-1 shrink-0">
                  <button onClick={() => setIsAutoFit(true)} className={`p-1.5 rounded flex items-center gap-1 text-xs font-bold ${isAutoFit ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}><Smartphone size={14}/> Auto</button>
                  <button onClick={() => setIsAutoFit(false)} className={`p-1.5 rounded flex items-center gap-1 text-xs font-bold ${!isAutoFit ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}><Maximize size={14}/> 100%</button>
              </div>
 
+             {/* Paper Size Selector */}
+             <div className="flex items-center bg-gray-100 rounded-lg p-1 shrink-0">
+                 <button onClick={() => setPaperType('a4')} className={`px-2 py-1.5 rounded text-xs font-bold transition-all ${paperType === 'a4' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:bg-gray-200'}`}>A4</button>
+                 <div className="w-px h-3 bg-gray-300 mx-1"></div>
+                 <button onClick={() => setPaperType('a5')} className={`px-2 py-1.5 rounded text-xs font-bold transition-all ${paperType === 'a5' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:bg-gray-200'}`}>A5</button>
+             </div>
+
+             {/* Export Buttons */}
              <div className="flex gap-2 shrink-0">
-                 <button onClick={() => handleExport('pdf')} className="flex items-center gap-1 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-xs font-bold border border-orange-200"><Download size={14}/> PDF</button>
-                 <button onClick={() => quickAI(`Viết tin nhắn Zalo gửi hóa đơn cho ${customerName}, tổng ${formatMoney(totalPrice)}đ.`, "Tin nhắn Zalo")} className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold border border-blue-200"><MessageCircle size={14}/> Zalo</button>
+                 <button onClick={() => handleExport('share', 'invoice')} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold shadow-sm active:scale-95 animate-pulse-once"><Share2 size={14}/> Gửi Zalo</button>
+                 <button onClick={() => handleExport('pdf', 'delivery')} className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-bold border border-green-200"><Package size={14}/> Kho</button>
+                 <button onClick={() => handleExport('pdf', 'invoice')} className="flex items-center gap-1 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-xs font-bold border border-orange-200"><Download size={14}/> Lưu</button>
              </div>
          </div>
 
@@ -287,7 +384,7 @@ export default function App() {
              <button onClick={() => quickAI(`Gợi ý chiến lược bán hàng cho khách ${customerName} mua ${items.map(i=>i.name).join(', ')}`, "Tư vấn chiến lược")} className="flex flex-col items-center gap-1 min-w-[60px] text-gray-600 hover:text-yellow-600"><Lightbulb size={20}/><span className="text-[10px]">Tư vấn</span></button>
              <button onClick={() => quickAI(`Viết status Facebook khoe đơn hàng gồm: ${items.map(i=>i.name).join(', ')}`, "Tin nhắn Khoe đơn")} className="flex flex-col items-center gap-1 min-w-[60px] text-gray-600 hover:text-blue-600"><Megaphone size={20}/><span className="text-[10px]">Khoe đơn</span></button>
              <button onClick={() => quickAI(`Dự báo khi nào khách ${customerName} cần mua lại các món: ${items.map(i=>i.name).join(', ')}`, "Dự báo mua lại")} className="flex flex-col items-center gap-1 min-w-[60px] text-gray-600 hover:text-green-600"><CalendarClock size={20}/><span className="text-[10px]">Dự báo</span></button>
-             <button onClick={() => quickAI(`Làm thơ cảm ơn khách ${customerName}`, "Thơ cảm ơn")} className="flex flex-col items-center gap-1 min-w-[60px] text-gray-600 hover:text-pink-600"><HeartHandshake size={20}/><span className="text-[10px]">Cảm ơn</span></button>
+             <button onClick={() => quickAI(`Viết tin nhắn Zalo gửi hóa đơn cho ${customerName}, tổng ${formatMoney(totalPrice)}đ.`, "Tin nhắn Zalo")} className="flex flex-col items-center gap-1 min-w-[60px] text-gray-600 hover:text-blue-600"><MessageCircle size={20}/><span className="text-[10px]">Zalo</span></button>
              <button onClick={() => quickAI(`Đánh giá rủi ro đơn hàng ${formatMoney(totalPrice)}đ`, "Rủi ro")} className="flex flex-col items-center gap-1 min-w-[60px] text-gray-600 hover:text-red-600"><ShieldAlert size={20}/><span className="text-[10px]">Rủi ro</span></button>
          </div>
       </div>
@@ -307,19 +404,24 @@ export default function App() {
             className="bg-white shadow-xl transition-transform duration-200 ease-out origin-top"
             ref={noteRef}
         >
-            <div className="p-8 md:p-10 h-full relative">
+            <div className={`${paperType === 'a5' ? 'p-6' : 'p-10'} h-full relative`}>
                 {/* Header */}
                 <div className="flex justify-between border-b-2 border-gray-800 pb-4 mb-6">
                     <div className="w-[60%]">
                         <input value={shopName} onChange={e=>setShopName(e.target.value)} className="w-full text-xl md:text-2xl font-bold uppercase outline-none bg-transparent placeholder-gray-300" placeholder="TÊN CỬA HÀNG"/>
-                        <input value={shopSlogan} onChange={e=>setShopSlogan(e.target.value)} className="w-full text-sm italic text-gray-500 outline-none bg-transparent mt-1" placeholder="Slogan..."/>
+                        <div className="flex items-center gap-1">
+                            <input value={shopSlogan} onChange={e=>setShopSlogan(e.target.value)} className="w-full text-sm italic text-gray-500 outline-none bg-transparent mt-1" placeholder="Slogan..."/>
+                            <button onClick={handleGenerateSlogan} className="text-purple-500 print:hidden opacity-50 hover:opacity-100" data-html2canvas-ignore="true" title="Tạo Slogan AI"><Sparkles size={14}/></button>
+                        </div>
                         <div className="mt-2 text-sm text-gray-600 space-y-1">
                             <div className="flex gap-1"><span className="font-semibold shrink-0">SĐT:</span><input value={shopPhone} onChange={e=>setShopPhone(e.target.value)} className="w-full outline-none bg-transparent"/></div>
                             <div className="flex gap-1"><span className="font-semibold shrink-0">ĐC:</span><input value={shopAddress} onChange={e=>setShopAddress(e.target.value)} className="w-full outline-none bg-transparent"/></div>
                         </div>
                     </div>
                     <div className="text-right">
-                        <h2 className="text-xl md:text-2xl font-bold text-gray-800 uppercase">{STORE_MODES[storeMode].headerTitle}</h2>
+                        <h2 className="text-xl md:text-2xl font-bold text-gray-800 uppercase">
+                            {exportMode === 'delivery' ? 'PHIẾU XUẤT KHO' : STORE_MODES[storeMode].headerTitle}
+                        </h2>
                         <div className="text-sm mt-2 flex flex-col items-end gap-1">
                             <div className="flex items-center justify-end gap-1"><span className="text-gray-500">Số:</span><input value={invoiceCode} onChange={e=>setInvoiceCode(e.target.value)} className="w-20 text-right font-mono font-bold text-red-600 outline-none bg-transparent"/></div>
                             <div className="flex items-center justify-end gap-1"><span className="text-gray-500">Ngày:</span><input value={date} onChange={e=>setDate(e.target.value)} className="w-24 text-right outline-none bg-transparent"/></div>
@@ -329,24 +431,37 @@ export default function App() {
 
                 {/* Customer Info */}
                 <div className="mb-6 grid grid-cols-1 gap-2 text-sm">
+                    {/* Always show Name */}
                     <div className="flex gap-2 items-center border-b border-dotted border-gray-300 pb-1">
                         <span className="font-bold w-20 shrink-0 text-gray-700">Khách hàng:</span>
                         <input value={customerName} onChange={e=>setCustomerName(e.target.value)} className={`w-full outline-none font-medium text-gray-900 ${isEditMode ? 'bg-blue-50/50 rounded px-1' : 'bg-transparent'}`} placeholder="Nhập tên khách..."/>
-                        <button onClick={() => quickAI(`Phân tích chân dung khách hàng tên "${customerName}"`, "Chân dung")} className="text-blue-500 print:hidden opacity-50 hover:opacity-100"><User size={14}/></button>
+                        <button onClick={() => quickAI(`Phân tích chân dung khách hàng tên "${customerName}"`, "Chân dung")} className="text-blue-500 print:hidden opacity-50 hover:opacity-100" data-html2canvas-ignore="true"><User size={14}/></button>
                     </div>
-                    <div className="flex gap-2 items-center border-b border-dotted border-gray-300 pb-1">
-                        <span className="font-bold w-20 shrink-0 text-gray-700">Điện thoại:</span>
-                        <input value={customerPhone} onChange={e=>setCustomerPhone(e.target.value)} className={`w-full outline-none text-gray-900 ${isEditMode ? 'bg-blue-50/50 rounded px-1' : 'bg-transparent'}`} placeholder="Nhập SĐT..."/>
-                    </div>
-                    <div className="flex gap-2 items-center border-b border-dotted border-gray-300 pb-1">
-                        <span className="font-bold w-20 shrink-0 text-gray-700">Địa chỉ:</span>
-                        <input value={customerAddress} onChange={e=>setCustomerAddress(e.target.value)} className={`w-full outline-none text-gray-900 ${isEditMode ? 'bg-blue-50/50 rounded px-1' : 'bg-transparent'}`} placeholder="Nhập địa chỉ..."/>
-                    </div>
-                    <div className="flex gap-2 items-center border-b border-dotted border-gray-300 pb-1">
-                        <span className="font-bold w-20 shrink-0 text-gray-700">Ghi chú:</span>
-                        <input value={note} onChange={e=>setNote(e.target.value)} className="w-full outline-none italic text-gray-600 bg-transparent" placeholder="Ghi chú..."/>
-                        <button onClick={() => quickAI(`Viết câu chúc ngắn gọn cho đơn hàng này`, "Gợi ý Ghi chú").then(t => t && setNote(t))} className="text-purple-500 print:hidden opacity-50 hover:opacity-100"><Sparkles size={14}/></button>
-                    </div>
+
+                    {/* Show Phone if Edit Mode OR has value */}
+                    {(isEditMode || customerPhone) && (
+                        <div className="flex gap-2 items-center border-b border-dotted border-gray-300 pb-1">
+                            <span className="font-bold w-20 shrink-0 text-gray-700">Điện thoại:</span>
+                            <input value={customerPhone} onChange={e=>setCustomerPhone(e.target.value)} className={`w-full outline-none text-gray-900 ${isEditMode ? 'bg-blue-50/50 rounded px-1' : 'bg-transparent'}`} placeholder="Nhập SĐT..."/>
+                        </div>
+                    )}
+
+                    {/* Show Address if Edit Mode OR has value */}
+                    {(isEditMode || customerAddress) && (
+                        <div className="flex gap-2 items-center border-b border-dotted border-gray-300 pb-1">
+                            <span className="font-bold w-20 shrink-0 text-gray-700">Địa chỉ:</span>
+                            <input value={customerAddress} onChange={e=>setCustomerAddress(e.target.value)} className={`w-full outline-none text-gray-900 ${isEditMode ? 'bg-blue-50/50 rounded px-1' : 'bg-transparent'}`} placeholder="Nhập địa chỉ..."/>
+                        </div>
+                    )}
+
+                    {/* Show Note if Edit Mode OR has value */}
+                    {(isEditMode || note) && (
+                        <div className="flex gap-2 items-center border-b border-dotted border-gray-300 pb-1">
+                            <span className="font-bold w-20 shrink-0 text-gray-700">Ghi chú:</span>
+                            <input value={note} onChange={e=>setNote(e.target.value)} className="w-full outline-none italic text-gray-600 bg-transparent" placeholder="Ghi chú..."/>
+                            <button onClick={() => quickAI(`Viết câu chúc ngắn gọn cho đơn hàng này`, "Gợi ý Ghi chú").then(t => t && setNote(t))} className="text-purple-500 print:hidden opacity-50 hover:opacity-100" data-html2canvas-ignore="true"><Sparkles size={14}/></button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Table */}
@@ -357,9 +472,9 @@ export default function App() {
                             <th className="border border-gray-400 p-2 text-left">Tên Hàng Hóa</th>
                             <th className="border border-gray-400 p-2 w-14">ĐVT</th>
                             <th className="border border-gray-400 p-2 w-14">SL</th>
-                            <th className="border border-gray-400 p-2 w-24 text-right">Đơn Giá</th>
-                            <th className="border border-gray-400 p-2 w-28 text-right">Thành Tiền</th>
-                            <th className="border border-gray-400 p-1 w-8 print:hidden"></th>
+                            {exportMode === 'invoice' && <th className="border border-gray-400 p-2 w-24 text-right">Đơn Giá</th>}
+                            {exportMode === 'invoice' && <th className="border border-gray-400 p-2 w-28 text-right">Thành Tiền</th>}
+                            <th className="border border-gray-400 p-1 w-8 print:hidden" data-html2canvas-ignore="true"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -372,9 +487,13 @@ export default function App() {
                                 </td>
                                 <td className="border border-gray-400 p-1"><input value={item.unit} onChange={e=>{const n=[...items];n[idx].unit=e.target.value;setItems(n)}} className="w-full text-center p-1 outline-none bg-transparent"/></td>
                                 <td className="border border-gray-400 p-1"><input type="number" value={item.qty} onChange={e=>{const n=[...items];n[idx].qty=e.target.value;setItems(n)}} className="w-full text-center font-bold p-1 outline-none bg-transparent"/></td>
-                                <td className="border border-gray-400 p-1"><input value={new Intl.NumberFormat('vi-VN').format(item.price)} onChange={e=>{const val=e.target.value.replace(/\D/g,'');const n=[...items];n[idx].price=val;setItems(n)}} className="w-full text-right p-1 outline-none bg-transparent"/></td>
-                                <td className="border border-gray-400 p-2 text-right font-medium">{formatMoney(item.qty * item.price)}</td>
-                                <td className="border border-gray-400 p-1 text-center print:hidden"><button onClick={()=>setItems(items.filter(i=>i.id!==item.id))} className="text-gray-300 hover:text-red-500"><Trash2 size={14}/></button></td>
+                                {exportMode === 'invoice' && (
+                                    <>
+                                    <td className="border border-gray-400 p-1"><input value={new Intl.NumberFormat('vi-VN').format(item.price)} onChange={e=>{const val=e.target.value.replace(/\D/g,'');const n=[...items];n[idx].price=val;setItems(n)}} className="w-full text-right p-1 outline-none bg-transparent"/></td>
+                                    <td className="border border-gray-400 p-2 text-right font-medium">{formatMoney(item.qty * item.price)}</td>
+                                    </>
+                                )}
+                                <td className="border border-gray-400 p-1 text-center print:hidden" data-html2canvas-ignore="true"><button onClick={()=>setItems(items.filter(i=>i.id!==item.id))} className="text-gray-300 hover:text-red-500"><Trash2 size={14}/></button></td>
                             </tr>
                         ))}
                     </tbody>
@@ -383,39 +502,45 @@ export default function App() {
                             <td colSpan={2} className="border border-gray-400 p-2 text-center uppercase text-gray-600">Tổng Cộng</td>
                             <td className="border border-gray-400 p-2"></td>
                             <td className="border border-gray-400 p-2 text-center">{totalQty}</td>
-                            <td className="border border-gray-400 p-2"></td>
-                            <td className="border border-gray-400 p-2 text-right text-lg text-blue-800">{formatMoney(totalPrice)}</td>
-                            <td className="border border-gray-400 p-2 print:hidden"></td>
+                            {exportMode === 'invoice' && (
+                                <>
+                                <td className="border border-gray-400 p-2"></td>
+                                <td className="border border-gray-400 p-2 text-right text-lg text-blue-800">{formatMoney(totalPrice)}</td>
+                                </>
+                            )}
+                            <td className="border border-gray-400 p-2 print:hidden" data-html2canvas-ignore="true"></td>
                         </tr>
                     </tfoot>
                 </table>
 
                 {/* Actions Row (Add Item) */}
-                <div className="flex gap-2 mb-4 print:hidden">
+                <div className="flex gap-2 mb-4 print:hidden" data-html2canvas-ignore="true">
                     <button onClick={()=>setItems([...items, {id:Date.now(), name:'', unit:'Cái', qty:1, price:0}])} className="flex items-center gap-1 text-xs font-bold bg-blue-50 text-blue-600 px-3 py-2 rounded hover:bg-blue-100"><Plus size={14}/> Thêm hàng</button>
                     <button onClick={()=>setItems(STORE_MODES[storeMode].defaultItems)} className="flex items-center gap-1 text-xs font-bold bg-gray-50 text-gray-600 px-3 py-2 rounded hover:bg-gray-100"><RefreshCw size={14}/> Reset</button>
                 </div>
 
-                {/* Money in Words */}
-                <div className="mb-6">
-                    <div className="flex gap-2 items-end text-sm mb-2">
-                        <span className="font-bold shrink-0">Bằng chữ:</span>
-                        <span className="flex-1 border-b border-dotted border-gray-400 italic text-gray-700">{amountInWords || '.............................................................'}</span>
-                        <button onClick={() => quickAI(`Đọc số tiền ${totalPrice} thành chữ tiếng Việt (viết hoa chữ cái đầu)`, "Đọc tiền").then(t => t && setAmountInWords(t))} className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded font-bold print:hidden">AI</button>
-                    </div>
-                    {showBankInfo && (
-                        <div className="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300 text-sm flex gap-2">
-                            <div className="font-bold text-gray-500 uppercase text-xs w-24 shrink-0 pt-1">Thanh toán:</div>
-                            <textarea value={bankInfo} onChange={e=>setBankInfo(e.target.value)} className="w-full bg-transparent outline-none resize-none text-gray-700 h-16" />
+                {/* Money in Words - Hide in Delivery Mode */}
+                {exportMode === 'invoice' && (
+                    <div className="mb-6">
+                        <div className="flex gap-2 items-end text-sm mb-2">
+                            <span className="font-bold shrink-0">Bằng chữ:</span>
+                            <span className="flex-1 border-b border-dotted border-gray-400 italic text-gray-700">{amountInWords || '.............................................................'}</span>
+                            <button onClick={() => quickAI(`Đọc số tiền ${totalPrice} thành chữ tiếng Việt (viết hoa chữ cái đầu)`, "Đọc tiền").then(t => t && setAmountInWords(t))} className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded font-bold print:hidden" data-html2canvas-ignore="true">AI</button>
                         </div>
-                    )}
-                </div>
+                        {showBankInfo && (
+                            <div className="bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300 text-sm flex gap-2">
+                                <div className="font-bold text-gray-500 uppercase text-xs w-24 shrink-0 pt-1">Thanh toán:</div>
+                                <textarea value={bankInfo} onChange={e=>setBankInfo(e.target.value)} className="w-full bg-transparent outline-none resize-none text-gray-700 h-16" />
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Footer */}
                 <div className="grid grid-cols-3 gap-4 text-center mt-8 text-xs uppercase font-bold text-gray-600">
                     <div><p>Người Lập Phiếu</p><p className="italic font-normal text-gray-400 mt-16">(Ký, họ tên)</p></div>
                     <div><p>Người Giao Hàng</p><p className="italic font-normal text-gray-400 mt-16">(Ký, họ tên)</p></div>
-                    <div><p>Khách Hàng</p><p className="italic font-normal text-gray-400 mt-16">(Ký, họ tên)</p></div>
+                    <div><p>{exportMode === 'invoice' ? 'Khách Hàng' : 'Người Nhận'}</p><p className="italic font-normal text-gray-400 mt-16">(Ký, họ tên)</p></div>
                 </div>
             </div>
         </div>
