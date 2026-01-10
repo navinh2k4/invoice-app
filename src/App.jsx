@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown, Zap, Image as ImageIcon, Lightbulb, Globe, Tag, MapPin, Percent, Mail, Megaphone, BookOpen, ShieldAlert, Package, PhoneCall, ShieldCheck, CalendarClock, HeartHandshake, User, FileText, LayoutTemplate, FileSignature, BellRing, CloudSun, Box, Feather, Video, LifeBuoy, Store, CalendarDays, Ticket } from 'lucide-react';
+import { Printer, FileDown, Plus, Trash2, Download, RefreshCw, PlusCircle, Sparkles, X, Minus, Wand2, Edit3, Settings, Eye, MessageCircle, Copy, Check, Share2, ChevronDown, Zap, Image as ImageIcon, Lightbulb, Globe, Tag, MapPin, Percent, Mail, Megaphone, BookOpen, ShieldAlert, Package, PhoneCall, ShieldCheck, CalendarClock, HeartHandshake, User, FileText, LayoutTemplate, FileSignature, BellRing, CloudSun, Box, Feather, Video, LifeBuoy, Store, CalendarDays, TicketPercent } from 'lucide-react';
 
 // Cấu hình các khổ giấy phổ biến
 const PAPER_TYPES = {
@@ -78,6 +78,7 @@ const AILoader = ({ message }) => (
 
 export default function InvoiceMakerApp() {
   const [storeMode, setStoreMode] = useState('pesticide'); // Mặc định là thuốc BVTV
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false); // State kiểm soát menu chọn phiên bản
 
   const [shopName, setShopName] = useState('ĐẠI LÝ THÀNH ĐẠT');
   const [shopSlogan, setShopSlogan] = useState('Uy tín tạo niềm tin - Chất lượng làm nên thương hiệu');
@@ -143,6 +144,7 @@ export default function InvoiceMakerApp() {
     setShippingTags([]);
     // Reset note nếu cần
     setNote('Kiểm hàng kỹ trước khi nhận');
+    setIsModeMenuOpen(false); // Đóng menu sau khi chọn
   };
 
   const incrementUsage = () => {
@@ -1023,18 +1025,29 @@ export default function InvoiceMakerApp() {
       {/* --- TOOLBAR --- */}
       <div className="w-full max-w-5xl bg-white p-3 rounded-lg shadow-md mb-6 print:hidden border sticky top-0 z-50 flex flex-wrap justify-between items-center gap-2">
         <div className="flex flex-wrap gap-2 items-center">
-            {/* STORE SWITCHER (NEW) */}
-            <div className="relative group mr-2">
-                <button className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 text-orange-700 border border-orange-200 rounded-full text-sm font-bold shadow-sm">
+            {/* STORE SWITCHER (UPDATED) */}
+            <div className="relative mr-2">
+                <button 
+                    onClick={() => setIsModeMenuOpen(!isModeMenuOpen)} 
+                    className="flex items-center gap-1 px-3 py-1.5 bg-orange-100 text-orange-700 border border-orange-200 rounded-full text-sm font-bold shadow-sm"
+                >
                    <Store size={16}/> {STORE_MODES[storeMode].label} <ChevronDown size={14}/>
                 </button>
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-50 hidden group-hover:block">
-                    {Object.keys(STORE_MODES).map(key => (
-                        <button key={key} onClick={() => handleModeChange(key)} className={`w-full text-left px-4 py-2 text-sm hover:bg-orange-50 ${storeMode === key ? 'bg-orange-100 font-bold text-orange-700' : 'text-gray-700'}`}>
-                            {STORE_MODES[key].label}
-                        </button>
-                    ))}
-                </div>
+                
+                {/* Menu chỉ hiện khi bấm */}
+                {isModeMenuOpen && (
+                    <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-50">
+                        {Object.keys(STORE_MODES).map(key => (
+                            <button 
+                                key={key} 
+                                onClick={() => handleModeChange(key)} 
+                                className={`w-full text-left px-4 py-2 text-sm hover:bg-orange-50 ${storeMode === key ? 'bg-orange-100 font-bold text-orange-700' : 'text-gray-700'}`}
+                            >
+                                {STORE_MODES[key].label}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
             
             <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold border ${usageCount >= DAILY_LIMIT ? 'bg-red-100 text-red-600' : 'bg-purple-50 text-purple-700'}`}><Zap size={14}/> <span>{usageCount}/{DAILY_LIMIT}</span></div>
@@ -1054,7 +1067,7 @@ export default function InvoiceMakerApp() {
                 <button onClick={handleReorderPrediction} className="p-1.5 text-green-700 hover:bg-green-100 rounded-full transition-all" title="Dự báo tái tiêu dùng"><CalendarClock size={16}/></button>
                 <button onClick={handleSeasonalTrend} className="p-1.5 text-orange-600 hover:bg-orange-100 rounded-full transition-all" title="Dự báo mùa vụ (Mới)"><CloudSun size={16}/></button>
                 <button onClick={handleCareSchedule} className="p-1.5 text-teal-600 hover:bg-teal-100 rounded-full transition-all" title="Lịch chăm sóc khách hàng (Mới)"><CalendarDays size={16}/></button>
-                <button onClick={handleCouponGenerator} className="p-1.5 text-fuchsia-600 hover:bg-fuchsia-100 rounded-full transition-all" title="Tạo mã giảm giá độc đáo (Mới)"><Ticket size={16}/></button>
+                <button onClick={handleCouponGenerator} className="p-1.5 text-fuchsia-600 hover:bg-fuchsia-100 rounded-full transition-all" title="Tạo mã giảm giá độc đáo (Mới)"><TicketPercent size={16}/></button>
             </div>
             
             {/* Nhóm nút Giao tiếp & Hướng dẫn & In Tem */}
