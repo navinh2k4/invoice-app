@@ -77,15 +77,15 @@ export default function App() {
   const [items, setItems] = useState(STORE_MODES['pesticide'].defaultItems);
   const [shopName, setShopName] = useState('ĐẠI LÝ THÀNH ĐẠT');
   const [shopSlogan, setShopSlogan] = useState('Uy tín - Chất lượng - Tận tâm');
-  const [shopPhone, setShopPhone] = useState('0909 123 456');
-  const [shopAddress, setShopAddress] = useState('123 Đường ABC, Huyện XYZ');
-  const [customerName, setCustomerName] = useState('Khách Lẻ');
+  const [shopPhone, setShopPhone] = useState('0357 041 668');
+  const [shopAddress, setShopAddress] = useState('125, DT685, xã Kiến Đức, tỉnh Lâm Đồng');
+  const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [note, setNote] = useState('Kiểm hàng kỹ trước khi nhận');
   const [date, setDate] = useState(new Date().toLocaleDateString('vi-VN'));
   const [invoiceCode, setInvoiceCode] = useState('HD001');
-  const [bankInfo, setBankInfo] = useState('• Ngân hàng: Agribank\n• STK: 123456789\n• CTK: NGUYEN VAN A');
+  const [bankInfo, setBankInfo] = useState('• Ngân hàng: Agribank\n• Số Tài Khoản: 5300205625965\n• Chủ Tài Khoản: NGUYEN THANH TUNG');
   const [showBankInfo, setShowBankInfo] = useState(true);
   
   // Settings
