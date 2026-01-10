@@ -10,7 +10,7 @@ Tạo một thư mục mới trên máy tính của bạn (ví dụ: invoice-app
 Tạo file package.json với nội dung sau để khai báo các thư viện cần thiết.
 ```
 {
-  "name": "invoice-maker-app",
+  "name": "invoice-app",
   "private": true,
   "version": "1.0.0",
   "type": "module",
