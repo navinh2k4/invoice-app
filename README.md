@@ -10,17 +10,12 @@ _Ứng dụng tạo hóa đơn và quản lý bán hàng thông minh, tích hợ
 
 _Ứng dụng sử dụng LLM để thực hiện các tác vụ phức tạp:_
 
-### Trích xuất đơn hàng thông minh: Tự động bóc tách thông tin khách hàng, sản phẩm, giá tiền từ đoạn tin nhắn văn bản hoặc hình ảnh (đơn viết tay/screenshot).
-
-### Tư vấn bán hàng: Phân tích đơn hàng để gợi ý chiến lược Upsell/Cross-sell, phân tích chân dung khách hàng.
-
-### Sáng tạo nội dung: Tự động viết mô tả sản phẩm, bài đăng Facebook/Zalo khoe đơn, làm thơ tặng khách.
-
-### Hỗ trợ vận hành: Đánh giá rủi ro bom hàng, hướng dẫn đóng gói an toàn, tạo nội dung tem dán vận chuyển.
-
-### Chăm sóc khách hàng: Soạn kịch bản gọi điện, tin nhắn nhắc nợ khéo léo, email báo giá chuyên nghiệp.
-
-### Dịch thuật & Chuẩn hóa: Dịch hóa đơn sang tiếng Anh, chuẩn hóa địa chỉ hành chính, sửa lỗi chính tả tên sản phẩm.
+- Trích xuất đơn hàng thông minh: Tự động bóc tách thông tin khách hàng, sản phẩm, giá tiền từ đoạn tin nhắn văn bản hoặc hình ảnh (đơn viết tay/screenshot).
+- Tư vấn bán hàng: Phân tích đơn hàng để gợi ý chiến lược Upsell/Cross-sell, phân tích chân dung khách hàng.
+- Sáng tạo nội dung: Tự động viết mô tả sản phẩm, bài đăng Facebook/Zalo khoe đơn, làm thơ tặng khách.
+- Hỗ trợ vận hành: Đánh giá rủi ro bom hàng, hướng dẫn đóng gói an toàn, tạo nội dung tem dán vận chuyển.
+- Chăm sóc khách hàng: Soạn kịch bản gọi điện, tin nhắn nhắc nợ khéo léo, email báo giá chuyên nghiệp.
+- Dịch thuật & Chuẩn hóa: Dịch hóa đơn sang tiếng Anh, chuẩn hóa địa chỉ hành chính, sửa lỗi chính tả tên sản phẩm.
 
 ## Quản lý Đa Ngành Hàng (Multi-Store Modes)
 
