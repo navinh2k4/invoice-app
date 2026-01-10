@@ -1,172 +1,101 @@
-# Hướng Dẫn Deploy App Hóa Đơn Lên Vercel
-Dưới đây là các bước chi tiết để bạn đưa ứng dụng này từ code máy lên internet.
+# Smart Invoice Maker AI
 
-## Bước 1: Chuẩn bị Source Code ở Local
+_Ứng dụng tạo hóa đơn và quản lý bán hàng thông minh, tích hợp Google Gemini AI để tự động hóa quy trình nhập liệu, chăm sóc khách hàng và tối ưu vận hành cho các cửa hàng bán lẻ đa ngành hàng._
 
-Tạo một thư mục mới trên máy tính của bạn (ví dụ: invoice-app), sau đó tạo các file sau bên trong thư mục đó.
+# Live Demo: https://hoadon.nguyenanvinh.id.vn
 
-### 1.1 package.json
+# Tính Năng Nổi Bật
 
-Tạo file package.json với nội dung sau để khai báo các thư viện cần thiết.
+## Sức mạnh AI (Powered by Gemini 1.5 Flash)
+
+_Ứng dụng sử dụng LLM để thực hiện các tác vụ phức tạp:_
+
+### Trích xuất đơn hàng thông minh: Tự động bóc tách thông tin khách hàng, sản phẩm, giá tiền từ đoạn tin nhắn văn bản hoặc hình ảnh (đơn viết tay/screenshot).
+
+### Tư vấn bán hàng: Phân tích đơn hàng để gợi ý chiến lược Upsell/Cross-sell, phân tích chân dung khách hàng.
+
+### Sáng tạo nội dung: Tự động viết mô tả sản phẩm, bài đăng Facebook/Zalo khoe đơn, làm thơ tặng khách.
+
+### Hỗ trợ vận hành: Đánh giá rủi ro bom hàng, hướng dẫn đóng gói an toàn, tạo nội dung tem dán vận chuyển.
+
+### Chăm sóc khách hàng: Soạn kịch bản gọi điện, tin nhắn nhắc nợ khéo léo, email báo giá chuyên nghiệp.
+
+### Dịch thuật & Chuẩn hóa: Dịch hóa đơn sang tiếng Anh, chuẩn hóa địa chỉ hành chính, sửa lỗi chính tả tên sản phẩm.
+
+## Quản lý Đa Ngành Hàng (Multi-Store Modes)
+
+### Hỗ trợ chuyển đổi nhanh giao diện và ngữ cảnh AI cho 4 mô hình kinh doanh:
+- Thuốc Bảo Vệ Thực Vật (Mặc định)
+- Tạp Hóa & Gia Dụng
+- Thú Y & Thức Ăn Chăn Nuôi
+- Dịch Vụ Cưới & Mâm Quả
+
+### Tiện ích Hóa Đơn
+- Tự động đọc số tiền thành chữ.
+- Tính toán tổng tiền tự động.
+- Xuất file PDF chuẩn khổ A4/A5.
+- Hỗ trợ in trực tiếp hoặc chia sẻ nhanh qua Zalo (Mobile).
+- Tùy chỉnh thông tin cửa hàng, logo, slogan.
+
+## Công Nghệ Sử Dụng (Tech Stack)
+- Frontend: React (Vite)
+- Styling: Tailwind CSS (Responsive Design)
+- Icons: Lucide React
+- AI Integration: Google Generative AI SDK (Gemini 1.5 Flash)
+- PDF Generation: html2pdf.js
+- Deployment: Vercel (CI/CD Automated)
+
+## Cài Đặt & Chạy Local
+
+Để chạy dự án này trên máy tính của bạn:
+
+### Clone repository:
 ```
-{
-  "name": "invoice-app",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "lucide-react": "^0.300.0",
-    "html2pdf.js": "^0.10.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.0",
-    "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32",
-    "tailwindcss": "^3.4.0",
-    "vite": "^5.0.0"
-  }
-}
-```
+git clone https://github.com/navinh2k4/invoice-app.git
 
-### 1.2 vite.config.js
-
-Cấu hình công cụ build Vite.
-```
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-// [https://vitejs.dev/config/](https://vitejs.dev/config/)
-export default defineConfig({
-  plugins: [react()],
-})
-```
-
-### 1.3 Cấu hình Tailwind CSS
-
-Bạn cần tạo 2 file để Tailwind hoạt động.
-
-#### File tailwind.config.js:
-```
-/** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-}
+cd invoice-app
 ```
 
-#### File postcss.config.js:
-```
-export default {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-}
-```
-
-### 1.4 index.html (Nằm ở thư mục gốc)
-```
-<!doctype html>
-<html lang="vi">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Công Cụ Tạo Hóa Đơn - Thành Đạt</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
-```
-
-### 1.5 Thư mục src
-
-Tạo thư mục tên là src. Bên trong tạo 3 file:
-
-#### File src/index.css:
-```
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-```
-
-#### File src/main.jsx:
-```
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
-import './index.css'
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
-```
-
-#### File src/App.jsx:
-Copy toàn bộ nội dung code React (file App.jsx) mà tôi đã cung cấp ở trên và dán vào đây.
-
-# Bước 2: Cài đặt và Chạy thử
-
-Mở Terminal (Command Prompt) tại thư mục dự án:
-Chạy lệnh npm install để tải thư viện.
+### Cài đặt dependencies:
 ```
 npm install
 ```
 
-Chạy lệnh npm run dev để chạy thử dưới local.
+### Cấu hình biến môi trường:
+Tạo file .env tại thư mục gốc và thêm API Key Gemini của bạn:
+```
+VITE_GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+### Chạy dự án:
 ```
 npm run dev
 ```
 
-# Bước 3: Đẩy lên GitHub
+Truy cập http://localhost:5173 để xem kết quả.
 
-Tạo một Repository mới trên GitHub (chế độ Public).
+## Quy Trình Deploy (CI/CD)
 
-Ở thư mục dự án, chạy các lệnh:
-```
-git init
-git add .
-git commit -m "First commit"
-git branch -M main
-git remote add origin [https://github.com/](https://github.com/)<tên-user-của-bạn>/<tên-repo>.git
-git push -u origin main
-```
+Dự án được thiết lập quy trình triển khai tự động:
 
-(Lưu ý: Nhớ tạo file .gitignore và thêm node_modules vào đó để không upload thư mục nặng này lên).
+Code được push lên nhánh main trên GitHub.
 
-# Bước 4: Deploy lên Vercel
+Vercel tự động trigger build.
 
-Truy cập vercel.com và đăng nhập bằng GitHub.
+Nếu build thành công, phiên bản mới sẽ được live tại production domain.
 
-Bấm nút "Add New..." -> "Project".
+### Cấu hình Vercel:
 
-Chọn Repo GitHub bạn vừa tạo.
+Framework Preset: Vite
 
-Ở mục Environment Variables (Quan trọng để AI hoạt động):
+Environment Variables: Cần add VITE_GEMINI_API_KEY vào phần Settings của dự án trên Vercel.
 
-```
-Key: VITE_GEMINI_API_KEY
-```
+## Screenshots
 
+(Bạn có thể thêm ảnh chụp màn hình ứng dụng tại đây để README sinh động hơn)
 
-Value: AIzaSy... (Điền API Key Gemini của bạn vào đây).
+## Đóng Góp
 
-Bấm Deploy.
+Mọi ý kiến đóng góp hoặc báo lỗi vui lòng tạo Issue hoặc gửi Pull Request.
 
-Sau khoảng 1 phút, Vercel sẽ cung cấp cho bạn một đường link (ví dụ: invoice-app.vercel.app). Bạn có thể gửi link này cho mọi người sử dụng!
+Phát triển bởi navinh2k4 Infra Intern
